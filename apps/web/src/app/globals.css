@@ -1,0 +1,56 @@
+@import 'tailwindcss';
+
+/* Self-hosted via npm (@fontsource) — Google Fonts is unreliable from Iranian networks. */
+@import '@fontsource-variable/vazirmatn';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+
+@theme {
+  /* Palette sampled from the product photos: black tees (ink), cream/white
+     fabric, warm amber-gold photo backdrops (sand), flamingo-pink accent. */
+  --color-cream: #f5f1ea;
+  --color-cream-50: #fbf8f3;
+  --color-cream-200: #e9e1d4;
+  --color-ink: #131110;
+  --color-ink-60: #6e6862;
+  --color-sand: #d4a437;
+  --color-sand-dark: #8a6a1c;
+  --color-clay: #8c4a32;
+  --color-flamingo: #d96a84;
+
+  --font-sans: 'Vazirmatn Variable', Tahoma, 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Inter', 'Vazirmatn Variable', Tahoma, sans-serif;
+
+  --radius-card: 2px;
+}
+
+@layer base {
+  html {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    -webkit-text-size-adjust: 100%;
+    font-size: 15px;
+  }
+  body {
+    font-family: var(--font-sans);
+    line-height: 1.65;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility wordmark {
+  font-family: var(--font-display);
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+}
