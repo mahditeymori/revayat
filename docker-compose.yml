@@ -1,0 +1,30 @@
+services:
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+        NEXT_PUBLIC_ENAMAD_CODE: ${NEXT_PUBLIC_ENAMAD_CODE}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      DATA_DIR: /app/data
+    volumes:
+      # admin edits (products/settings/orders) must survive rebuilds
+      - revayat_data:/app/data
+    expose:
+      - '3000'
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  revayat_data:
