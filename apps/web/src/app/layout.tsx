@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { site, nav } from '@/lib/site';
 import { getSettings, safe } from '@/lib/catalog';
 import { CartBadge } from '@/components/CartBadge';
+import { Track } from '@/components/Track';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -46,6 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {children}
         </main>
         <Footer footerText={settings?.footerText} />
+        <Track />
       </body>
     </html>
   );
