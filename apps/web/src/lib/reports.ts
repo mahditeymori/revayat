@@ -27,6 +27,13 @@ export type ProductPerf = {
   cartToOrderRate: number;
 };
 
+export type ConsentStats = {
+  accepted: number;
+  declined: number;
+  /** 0–1, or null when nobody has answered yet — a 0% share would be a lie. */
+  acceptRate: number | null;
+};
+
 export type Sales = {
   revenueRial: number;
   orders: number;
@@ -88,13 +95,16 @@ export function traffic(events: AnalyticsEvent[], days: number): Traffic {
   };
 }
 
-export function productPerf(
-  events: AnalyticsEvent[],
-  names: Map<number, string>,
-  orderCount: number,
-): ProductPerf {
+export function productPerf(events: AnalyticsEvent[], names: Map<number, string>): ProductPerf {
   const viewed = events.filter((e) => e.type === 'product_view');
   const carted = events.filter((e) => e.type === 'add_to_cart');
+
+  // Both sides of this ratio must describe the same people. add_to_cart only
+  // exists for visitors who accepted analytics, so the numerator counts only
+  // their orders — measuring every order against a consented-only cart count
+  // would push the rate past 100%. Events recorded before the banner existed
+  // have no flag; they were all tracked, so `!== false` keeps them counted.
+  const converted = events.filter((e) => e.type === 'purchase' && e.consented !== false);
 
   const byProduct = new Map<string, number>();
   for (const e of viewed) {
@@ -108,8 +118,24 @@ export function productPerf(
     topSearched: rank(tally(events.filter((e) => e.type === 'search'), (e) => e.query)),
     addToCart: carted.length,
     viewToCartRate: viewed.length ? carted.length / viewed.length : 0,
-    cartToOrderRate: carted.length ? orderCount / carted.length : 0,
+    cartToOrderRate: carted.length ? converted.length / carted.length : 0,
   };
+}
+
+/**
+ * How many people answered the cookie banner, and which way.
+ *
+ * Counts answers, not people: someone who accepts, later declines, and clears
+ * their cookies contributes to both. That is the honest ceiling of a measure
+ * that refuses to identify the people it is measuring — a declined row carries
+ * no visitor id at all, by design, so it cannot be deduplicated.
+ */
+export function consentStats(events: AnalyticsEvent[]): ConsentStats {
+  const answers = events.filter((e) => e.type === 'consent');
+  const accepted = answers.filter((e) => e.decision === 'yes').length;
+  const declined = answers.filter((e) => e.decision === 'no').length;
+  const total = accepted + declined;
+  return { accepted, declined, acceptRate: total ? accepted / total : null };
 }
 
 export function sales(orders: Order[], days: number): Sales {
@@ -156,7 +182,8 @@ export async function buildDashboard(days = 30) {
   return {
     days,
     traffic: traffic(events, days),
-    products: productPerf(events, names, salesReport.orders),
+    products: productPerf(events, names),
     sales: salesReport,
+    consent: consentStats(events),
   };
 }

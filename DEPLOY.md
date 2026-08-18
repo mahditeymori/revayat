@@ -186,22 +186,40 @@ password, so they are invalidated by the change — log in again.
 
 ## Analytics cookies
 
-Two first-party cookies, set by `/api/track`, both holding only a random opaque
-id — not derived from the IP, the user agent, or anything the visitor typed:
+Three first-party cookies. The two analytics ones hold only a random opaque id —
+not derived from the IP, the user agent, or anything the visitor typed:
 
-| Cookie | Life | Purpose |
-|---|---|---|
-| `_rs` | 30 min, sliding | one session; the idle timeout *is* the expiry |
-| `_rv` | 180 days | new vs returning visitor |
+| Cookie | Life | Set by | Purpose |
+|---|---|---|---|
+| `_rs` | 30 min, sliding | `/api/track` | one session; the idle timeout *is* the expiry |
+| `_rv` | 180 days | `/api/track` | new vs returning visitor |
+| `_rc` | 180 days | `/api/consent` | the banner answer, literally `yes` or `no` |
 
-Both are `HttpOnly` + `SameSite=Lax`, and `Secure` whenever the request arrives
-over HTTPS. No third-party origins are involved, so the CSP is unchanged.
+`_rs`/`_rv` are `HttpOnly`; `_rc` is not, because the banner has to decide
+whether to render without a server round-trip. All are `SameSite=Lax` and
+`Secure` whenever the request arrives over HTTPS. No third-party origins, so the
+CSP is unchanged.
 
-If you change either lifetime in `src/lib/analytics.ts`, update the disclosure in
-`src/lib/pages.ts` (`/pages/privacy`) to match — it names both durations.
+**Nothing is tracked until the visitor accepts.** `_rs`/`_rv` are only ever
+issued to someone holding `_rc=yes`; `/api/track` returns `204` and sets no
+cookie otherwise, and the client does not even send the request. Declining
+deletes any ids from a previous acceptance.
 
-Visitors who block cookies still get counted, via the daily-rotating hash
-fallback; they can only ever look "new," so the returning figure is a floor.
+Consequences worth knowing when reading the dashboard:
+
+- Every traffic number is a **floor** — it counts consented visitors only.
+- `cart→order` counts only orders from consented buyers, because `add_to_cart`
+  only exists for them. Without that the rate would exceed 100%. The flag is one
+  bit on the purchase row (`consented`), never an identifier.
+- The consent tile counts **answers, not people**: a declined row deliberately
+  carries no visitor id, so a change of mind counts twice. Repeat posts of an
+  unchanged answer are deduped and never recorded.
+
+If you change any lifetime in `src/lib/analytics.ts`, update the disclosure in
+`src/lib/pages.ts` (`/pages/privacy`) to match — it names all three durations.
+
+Visitors who accept but block cookies still get counted, via the daily-rotating
+hash fallback; they can only ever look "new," so the returning figure is a floor.
 
 ## Product images
 

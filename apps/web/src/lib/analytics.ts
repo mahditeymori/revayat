@@ -14,7 +14,13 @@ const EVENTS_DIR = path.join(DATA_DIR, 'analytics');
 /** Days of raw event data to keep. Older files are deleted on write. */
 const RETENTION_DAYS = 90;
 
-export type EventType = 'pageview' | 'product_view' | 'search' | 'add_to_cart' | 'purchase';
+export type EventType =
+  | 'pageview'
+  | 'product_view'
+  | 'search'
+  | 'add_to_cart'
+  | 'purchase'
+  | 'consent';
 
 export type AnalyticsEvent = {
   t: string;        // ISO timestamp
@@ -26,6 +32,8 @@ export type AnalyticsEvent = {
   productId?: number;
   query?: string;
   value?: number;   // order total in Rial, purchase events only
+  decision?: Consent; // consent events only
+  consented?: boolean; // purchase events only — see the funnel note in reports.ts
 };
 
 // ---------------------------------------------------------------------------
@@ -41,15 +49,34 @@ export type AnalyticsEvent = {
 //
 // The 30-minute sliding window is the standard session definition: the cookie
 // is re-set on every event, so it only lapses after 30 minutes of no activity.
-// No cross-site cookies, no third parties, so no consent banner is required
-// under the usual "strictly first-party measurement" reading — but see
-// COOKIE_NOTICE in the privacy page copy.
+//
+// Neither is issued until the visitor accepts the banner — see `_rc` below.
 // ---------------------------------------------------------------------------
 
 export const VISITOR_COOKIE = '_rv';
 export const SESSION_COOKIE = '_rs';
 export const VISITOR_MAX_AGE = 60 * 60 * 24 * 180; // 180 days
 export const SESSION_MAX_AGE = 60 * 30; // 30 minutes, sliding
+
+// ---------------------------------------------------------------------------
+// Consent
+//
+// `_rc` records the visitor's answer to the banner. It is NOT an analytics
+// cookie: it holds the literal string "yes" or "no" and is set on both answers,
+// because "do not track me" is only honourable if we can remember it. Storing
+// the refusal is what stops the banner reappearing on every page.
+//
+// It is deliberately readable by JavaScript (not HttpOnly) — the banner has to
+// decide whether to render without a server round-trip, and there is nothing to
+// protect in a value the visitor chose themselves.
+// ---------------------------------------------------------------------------
+
+export const CONSENT_COOKIE = '_rc';
+export const CONSENT_MAX_AGE = 60 * 60 * 24 * 180; // 180 days, same as the visitor id
+
+export type Consent = 'yes' | 'no';
+
+export const isConsent = (v: string | undefined): v is Consent => v === 'yes' || v === 'no';
 
 /** Opaque random id. Not a hash of anything — nothing to reverse. */
 export const newId = (): string => randomBytes(9).toString('base64url');

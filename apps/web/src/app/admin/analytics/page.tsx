@@ -16,7 +16,7 @@ export default async function AnalyticsPage({
 }) {
   const { days: raw } = await searchParams;
   const days = RANGES.find((r) => String(r) === raw) ?? 30;
-  const { traffic, products, sales } = await buildDashboard(days);
+  const { traffic, products, sales, consent } = await buildDashboard(days);
 
   return (
     <div>
@@ -43,9 +43,36 @@ export default async function AnalyticsPage({
       <p className="mt-2 text-xs text-ink-60">
         آمار روی سرور خودمان و بدون سرویس بیرونی ثبت می‌شود. شناسایی با دو کوکی داخلی انجام
         می‌شود: نشست ۳۰ دقیقه و بازدیدکننده ۱۸۰ روز — هر دو فقط یک شناسه تصادفی، بدون هیچ
-        اطلاعات شخصی. بازدیدکننده‌ای که کوکی را مسدود کند همیشه «جدید» شمرده می‌شود، پس عدد
-        بازگشتی کمی کمتر از واقعیت است. بازدید از پنل مدیریت ثبت نمی‌شود.
+        اطلاعات شخصی. این کوکی‌ها فقط برای کسانی ساخته می‌شوند که در نوار پایین صفحه «قبول
+        می‌کنم» را زده باشند؛ بقیه اصلاً ثبت نمی‌شوند، پس اعداد این صفحه کف واقعیت است نه همهٔ
+        آن. بازدیدکننده‌ای که کوکی را مسدود کند همیشه «جدید» شمرده می‌شود. بازدید از پنل مدیریت
+        ثبت نمی‌شود.
       </p>
+
+      <div className="mt-4 border border-cream-200 p-4">
+        <p className="text-xs font-medium">رضایت کوکی</p>
+        <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+          <div>
+            <p className="text-ink-60">پذیرفته‌اند</p>
+            <p className="mt-1 text-base">{num(consent.accepted)}</p>
+          </div>
+          <div>
+            <p className="text-ink-60">رد کرده‌اند</p>
+            <p className="mt-1 text-base">{num(consent.declined)}</p>
+          </div>
+          <div>
+            <p className="text-ink-60">نرخ پذیرش</p>
+            <p className="mt-1 text-base">
+              {consent.acceptRate === null ? '—' : pct(consent.acceptRate)}
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 text-xs leading-6 text-ink-60">
+          شمارش پاسخ‌هاست، نه آدم‌ها: پاسخِ «نه» عمداً بدون هیچ شناسه‌ای ذخیره می‌شود، پس اگر
+          کسی نظرش را عوض کند یا کوکی‌هایش را پاک کند دوباره شمرده می‌شود. عدد پذیرش هم فقط
+          پاسخ‌های همین بازهٔ زمانی است.
+        </p>
+      </div>
 
       <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="بازدید صفحه" value={num(traffic.pageviews)} />
