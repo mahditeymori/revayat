@@ -5,18 +5,29 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
+// How many events this tab has sent. The server uses it to tell a genuine first
+// visit (n === 0, no cookie yet) from a visitor who blocks cookies (n > 0 and
+// still no cookie) — without it, every blocked request would look like a brand
+// new visitor and inflate the unique count. It is a per-tab counter, not an id:
+// it identifies nothing and resets on reload.
+let sent = 0;
+
+function post(body: Record<string, unknown>): void {
+  // credentials: 'same-origin' is the fetch default, so the analytics cookies
+  // ride along; keepalive lets the request survive the navigation that follows.
+  fetch('/api/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, n: sent++ }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 export function trackEvent(
   type: 'product_view' | 'search' | 'add_to_cart',
   data: { path?: string; productId?: number; query?: string } = {},
 ): void {
-  const body = JSON.stringify({ type, path: data.path ?? location.pathname, ...data });
-  // keepalive so the request survives the navigation that often follows.
-  fetch('/api/track', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-    keepalive: true,
-  }).catch(() => {});
+  post({ type, path: data.path ?? location.pathname, ...data });
 }
 
 export function Track() {
@@ -31,12 +42,7 @@ export function Track() {
     // Never log the admin panel — it is our own traffic, not the store's.
     if (pathname.startsWith('/admin')) return;
 
-    fetch('/api/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'pageview', path: pathname }),
-      keepalive: true,
-    }).catch(() => {});
+    post({ type: 'pageview', path: pathname });
   }, [pathname]);
 
   return null;

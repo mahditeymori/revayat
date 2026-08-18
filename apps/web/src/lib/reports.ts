@@ -58,12 +58,19 @@ function tally<T>(items: T[], key: (item: T) => string | undefined): Map<string,
 export function traffic(events: AnalyticsEvent[], days: number): Traffic {
   const views = events.filter((e) => e.type === 'pageview');
 
-  // A visitor hash rotates daily, so "returning" means seen on >1 distinct day.
+  // Returning = seen on more than one distinct day. The visitor cookie lasts
+  // 180 days, so this now survives across days for anyone who accepts it;
+  // cookie-blocked visitors fall back to a daily hash and can only ever look
+  // new, which undercounts returning rather than inventing it.
   const daysSeen = new Map<string, Set<string>>();
+  const sessions = new Set<string>();
   for (const e of views) {
     const set = daysSeen.get(e.visitor) ?? new Set<string>();
     set.add(e.t.slice(0, 10));
     daysSeen.set(e.visitor, set);
+    // Pre-cookie events have no session id; fall back to visitor+day so old
+    // data still counts as one session rather than vanishing from the total.
+    sessions.add(e.session ?? `${e.visitor}:${e.t.slice(0, 10)}`);
   }
 
   const perDay = tally(views, (e) => e.t.slice(0, 10));
@@ -72,9 +79,9 @@ export function traffic(events: AnalyticsEvent[], days: number): Traffic {
     visitors: daysSeen.size,
     pageviews: views.length,
     returning: [...daysSeen.values()].filter((d) => d.size > 1).length,
-    // One session = one visitor on one day. Without a session cookie we cannot
-    // split a day into visits, and adding one would break the no-cookie promise.
-    sessions: [...daysSeen.values()].reduce((sum, d) => sum + d.size, 0),
+    // One session = one visit: the session cookie expires after 30 minutes of
+    // inactivity, so a return later the same day is correctly a second session.
+    sessions: sessions.size,
     byDay: lastDays(days).map((day) => ({ day, value: perDay.get(day) ?? 0 })),
     topPages: rank(tally(views, (e) => e.path)),
     topReferrers: rank(tally(views, (e) => e.ref)),

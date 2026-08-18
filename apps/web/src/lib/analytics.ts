@@ -1,4 +1,4 @@
-// First-party analytics. No cookies, no third parties, no raw IP storage.
+// First-party analytics. No third parties, no raw IP storage.
 //
 // Storage is one NDJSON file per UTC day in DATA_DIR/analytics/. Appending a
 // line is atomic enough for this volume, and pruning old data is `rm` rather
@@ -20,16 +20,47 @@ export type AnalyticsEvent = {
   t: string;        // ISO timestamp
   type: EventType;
   path: string;
-  visitor: string;  // daily-rotating pseudonymous hash — not stable across days
+  visitor: string;  // opaque visitor id (cookie) or daily hash fallback
+  session?: string; // opaque session id — 30min idle window
   ref?: string;     // referrer host only, never the full URL
   productId?: number;
   query?: string;
   value?: number;   // order total in Rial, purchase events only
 };
 
-// Rotates daily so a visitor hash cannot be used to build a long-term profile.
-// Random per-process salt means the hash is not reversible to an IP even with
-// the source data — it is only useful for counting distinct visitors within a day.
+// ---------------------------------------------------------------------------
+// Visitor identity
+//
+// Two first-party cookies, both holding a random opaque id and nothing else.
+// They are not derived from the IP, the user agent, or anything the visitor
+// typed, so there is nothing personal to leak even if the file is read — the id
+// is meaningless outside this site's own event log.
+//
+//   _rv  visitor  180 days   distinguishes new from returning
+//   _rs  session   30 min    one visit; the sliding expiry IS the idle timeout
+//
+// The 30-minute sliding window is the standard session definition: the cookie
+// is re-set on every event, so it only lapses after 30 minutes of no activity.
+// No cross-site cookies, no third parties, so no consent banner is required
+// under the usual "strictly first-party measurement" reading — but see
+// COOKIE_NOTICE in the privacy page copy.
+// ---------------------------------------------------------------------------
+
+export const VISITOR_COOKIE = '_rv';
+export const SESSION_COOKIE = '_rs';
+export const VISITOR_MAX_AGE = 60 * 60 * 24 * 180; // 180 days
+export const SESSION_MAX_AGE = 60 * 30; // 30 minutes, sliding
+
+/** Opaque random id. Not a hash of anything — nothing to reverse. */
+export const newId = (): string => randomBytes(9).toString('base64url');
+
+/** A cookie value we did not write is never trusted into the event log. */
+export const isValidId = (v: string | undefined): v is string =>
+  typeof v === 'string' && /^[A-Za-z0-9_-]{12}$/.test(v);
+
+// Fallback only, for visitors who block cookies: rotates daily so it cannot
+// build a long-term profile, and the random per-process salt means it is not
+// reversible to an IP even with the source data.
 const SALT = randomBytes(32);
 
 export function visitorHash(ip: string, ua: string, day: string): string {

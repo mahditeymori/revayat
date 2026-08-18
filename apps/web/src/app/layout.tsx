@@ -124,6 +124,11 @@ function Footer({ footerText }: { footerText?: string }) {
                 تماس با ما
               </Link>
             </li>
+            <li>
+              <Link href="/pages/privacy" className="hover:text-ink">
+                حریم خصوصی
+              </Link>
+            </li>
           </ul>
         </nav>
       </div>
