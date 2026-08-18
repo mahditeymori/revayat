@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addToCart, updateCartItem, getCart, clearCart } from '@/lib/cart';
 import { getCatalog, createOrder, effectivePrice, type OrderItem } from '@/lib/catalog';
-import { record } from '@/lib/analytics';
+import { cookies } from 'next/headers';
+import { record, CONSENT_COOKIE } from '@/lib/analytics';
 import { normalizeDigits } from '@/lib/format';
 
 export type CartActionState = { error: string | null; ok?: boolean };
@@ -86,12 +87,19 @@ export async function submitCheckoutAction(formData: FormData): Promise<void> {
 
   // Recorded server-side: a client beacon would miss orders whenever the
   // success redirect is interrupted, and could be forged from the browser.
+  //
+  // `consented` is what keeps the funnel honest. add_to_cart only exists for
+  // visitors who accepted, so counting every purchase against it would let
+  // cart→order exceed 100%. The flag never identifies the buyer — it is one bit
+  // saying which population this row belongs to.
+  const consent = (await cookies()).get(CONSENT_COOKIE)?.value;
   await record({
     t: new Date().toISOString(),
     type: 'purchase',
     path: '/checkout',
     visitor: 'server',
     value: order.totalRial,
+    consented: consent === 'yes',
   }).catch(() => {}); // analytics must never block a completed order
 
   await clearCart();

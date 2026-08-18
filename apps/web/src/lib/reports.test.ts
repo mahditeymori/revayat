@@ -1,7 +1,7 @@
 // Run: npm test   (node --test --experimental-strip-types, no framework)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { traffic, productPerf, sales } from './reports.ts';
+import { traffic, productPerf, sales, consentStats } from './reports.ts';
 import type { AnalyticsEvent } from './analytics.ts';
 import type { Order } from './catalog.ts';
 
@@ -64,18 +64,57 @@ test('productPerf computes funnel rates and survives an empty funnel', () => {
     { t: day(0), type: 'product_view', path: '/p', visitor: 'b', productId: 1 },
     { t: day(0), type: 'product_view', path: '/p', visitor: 'c', productId: 2 },
     { t: day(0), type: 'add_to_cart', path: '/p', visitor: 'a', productId: 1 },
+    { t: day(0), type: 'purchase', path: '/checkout', visitor: 'server', consented: true },
     { t: day(0), type: 'search', path: '/search', visitor: 'a', query: 'دماوند' },
   ];
-  const p = productPerf(events, new Map([[1, 'دماوند']]), 1);
+  const p = productPerf(events, new Map([[1, 'دماوند']]));
   assert.deepEqual(p.topViewed[0], { label: 'دماوند', count: 2 });
   assert.equal(p.topViewed[1].label, '#2'); // unknown id falls back, never crashes
   assert.equal(p.topSearched[0].label, 'دماوند');
   assert.equal(p.viewToCartRate, 1 / 3);
   assert.equal(p.cartToOrderRate, 1);
 
-  const zero = productPerf([], new Map(), 0);
+  const zero = productPerf([], new Map());
   assert.equal(zero.viewToCartRate, 0); // no divide-by-zero NaN in the dashboard
   assert.equal(zero.cartToOrderRate, 0);
+});
+
+test('cartToOrderRate ignores orders from visitors who declined analytics', () => {
+  // The bug this guards: add_to_cart exists only for consented visitors, so
+  // counting every order against it pushes the rate above 100%.
+  const events: AnalyticsEvent[] = [
+    { t: day(0), type: 'add_to_cart', path: '/p', visitor: 'a', productId: 1 },
+    { t: day(0), type: 'purchase', path: '/checkout', visitor: 'server', consented: true },
+    { t: day(0), type: 'purchase', path: '/checkout', visitor: 'server', consented: false },
+    { t: day(0), type: 'purchase', path: '/checkout', visitor: 'server', consented: false },
+  ];
+  assert.equal(productPerf(events, new Map()).cartToOrderRate, 1);
+
+  // Rows written before the banner shipped carry no flag — those visitors were
+  // all tracked, so dropping them would silently deflate historical rates.
+  const legacy: AnalyticsEvent[] = [
+    { t: day(0), type: 'add_to_cart', path: '/p', visitor: 'a', productId: 1 },
+    { t: day(0), type: 'purchase', path: '/checkout', visitor: 'server' },
+  ];
+  assert.equal(productPerf(legacy, new Map()).cartToOrderRate, 1);
+});
+
+test('consentStats counts both answers and reports no rate before anyone answers', () => {
+  const events: AnalyticsEvent[] = [
+    { t: day(0), type: 'consent', path: '/', visitor: 'a', decision: 'yes' },
+    { t: day(0), type: 'consent', path: '/', visitor: 'b', decision: 'yes' },
+    { t: day(0), type: 'consent', path: '/', visitor: 'c', decision: 'yes' },
+    { t: day(0), type: 'consent', path: '/', visitor: 'anon', decision: 'no' },
+    { t: day(0), type: 'pageview', path: '/', visitor: 'a' }, // not an answer
+  ];
+  const c = consentStats(events);
+  assert.equal(c.accepted, 3);
+  assert.equal(c.declined, 1);
+  assert.equal(c.acceptRate, 0.75);
+
+  // null, not 0: "nobody has answered" and "everybody refused" are different
+  // facts, and showing 0% for the first one would be a lie in the admin panel.
+  assert.equal(consentStats([]).acceptRate, null);
 });
 
 const order = (back: number, totalRial: number, status: Order['status'], qty = 1): Order =>

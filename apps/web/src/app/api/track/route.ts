@@ -11,8 +11,10 @@ import {
   pruneOld,
   newId,
   isValidId,
+  isConsent,
   VISITOR_COOKIE,
   SESSION_COOKIE,
+  CONSENT_COOKIE,
   VISITOR_MAX_AGE,
   SESSION_MAX_AGE,
   type EventType,
@@ -61,9 +63,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // No consent, no tracking. Refusal is enforced here rather than trusted to the
+  // client: an event that arrives anyway (stale tab, replayed request) is
+  // dropped, and no identifying cookie is issued on the way out.
+  const jar = await cookies();
+  const consent = jar.get(CONSENT_COOKIE)?.value;
+  if (!isConsent(consent) || consent === 'no') {
+    return new NextResponse(null, { status: 204 }); // 204 carries no body by definition
+  }
+
   // Identity comes from our own cookies. A value we did not write is discarded
   // rather than logged, so a crafted cookie cannot inflate or poison the counts.
-  const jar = await cookies();
   const existing = jar.get(VISITOR_COOKIE)?.value;
   const priorSession = jar.get(SESSION_COOKIE)?.value;
 
