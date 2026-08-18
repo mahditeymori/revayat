@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { getProducts, getCategories, safe } from '@/lib/catalog';
+import { staticPages } from '@/lib/pages';
 import { site } from '@/lib/site';
 
 export const revalidate = 3600;
@@ -22,6 +23,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${site.url}/products/${p.slug}`,
       changeFrequency: 'weekly' as const,
       priority: 0.9,
+    })),
+    { url: `${site.url}/about`, changeFrequency: 'monthly' as const, priority: 0.5 },
+    ...staticPages.map((p) => ({
+      url: `${site.url}/pages/${p.slug}`,
+      changeFrequency: 'monthly' as const,
+      priority: 0.4,
     })),
   ];
 }
