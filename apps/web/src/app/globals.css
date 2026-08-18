@@ -22,6 +22,21 @@
   --font-display: 'Inter', 'Vazirmatn Variable', Tahoma, sans-serif;
 
   --radius-card: 2px;
+
+  /* Loading state (app/loading.tsx). The global prefers-reduced-motion rule
+     below collapses both to a near-instant duration. */
+  --animate-brand-pulse: brand-pulse 1.6s ease-in-out infinite;
+  --animate-brand-sweep: brand-sweep 1.2s ease-in-out infinite;
+}
+
+@keyframes brand-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@keyframes brand-sweep {
+  0% { transform: translateX(300%); }
+  100% { transform: translateX(-100%); }
 }
 
 @layer base {

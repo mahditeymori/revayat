@@ -20,8 +20,18 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/data ./data
+
+# Seed data ships in a separate directory, NOT in /app/data. /app/data is the
+# mount point for the production volume — anything copied there would be
+# shadowed by the volume at runtime, leaving the image copy permanently stale
+# while the app writes to the volume. docker-entrypoint.sh copies missing files
+# across on first boot instead.
+COPY --from=builder --chown=nextjs:nodejs /app/data ./data-seed
+COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh && mkdir -p /app/data && chown nextjs:nodejs /app/data
+
 USER nextjs
 EXPOSE 3000
-ENV PORT=3000 HOSTNAME=0.0.0.0
-CMD ["sh", "-c", "npm test && node server.js"]
+ENV PORT=3000 HOSTNAME=0.0.0.0 DATA_DIR=/app/data
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["node", "server.js"]

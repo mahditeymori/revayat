@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
@@ -14,6 +13,7 @@ import {
 import { formatToman, discountPercent } from '@/lib/format';
 import { site } from '@/lib/site';
 import { ProductCard } from '@/components/ProductCard';
+import { ProductGallery } from '@/components/ProductGallery';
 import { AddToCartForm } from './AddToCartForm';
 
 export const revalidate = 300;
@@ -91,20 +91,7 @@ export default async function ProductPage({ params }: Props) {
       </nav>
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_400px]">
-        <div className="grid gap-4 sm:grid-cols-2">
-          {product.images.map((src, i) => (
-            <div key={src} className={`relative aspect-[3/4] bg-cream-200 ${i === 0 ? 'sm:col-span-2' : ''}`}>
-              <Image
-                src={src}
-                alt={`${product.name} — تصویر ${i + 1}`}
-                fill
-                priority={i === 0}
-                sizes={i === 0 ? '(min-width: 1024px) 60vw, 100vw' : '(min-width: 1024px) 30vw, 50vw'}
-                className="object-cover"
-              />
-            </div>
-          ))}
-        </div>
+        <ProductGallery images={product.images} name={product.name} />
 
         <div className="lg:sticky lg:top-24 lg:self-start">
           <p className="wordmark text-xs text-ink-60">{site.name}</p>

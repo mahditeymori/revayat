@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getProducts, safe } from '@/lib/catalog';
 import { ProductCard } from '@/components/ProductCard';
+import { TrackSearch } from './TrackSearch';
 
 export const metadata: Metadata = { title: 'جستجو', alternates: { canonical: '/search' } };
 
@@ -15,6 +16,7 @@ export default async function SearchPage({
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
+      <TrackSearch query={query} />
       <h1 className="text-2xl font-medium">جستجو</h1>
       <form action="/search" method="get" className="mt-6 flex max-w-lg gap-2">
         <label className="sr-only" htmlFor="q">عبارت جستجو</label>

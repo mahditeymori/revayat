@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addToCart, updateCartItem, getCart, clearCart } from '@/lib/cart';
 import { getCatalog, createOrder, effectivePrice, type OrderItem } from '@/lib/catalog';
+import { record } from '@/lib/analytics';
 import { normalizeDigits } from '@/lib/format';
 
 export type CartActionState = { error: string | null; ok?: boolean };
@@ -82,6 +83,17 @@ export async function submitCheckoutAction(formData: FormData): Promise<void> {
   }));
 
   const order = await createOrder(customer, items);
+
+  // Recorded server-side: a client beacon would miss orders whenever the
+  // success redirect is interrupted, and could be forged from the browser.
+  await record({
+    t: new Date().toISOString(),
+    type: 'purchase',
+    path: '/checkout',
+    visitor: 'server',
+    value: order.totalRial,
+  }).catch(() => {}); // analytics must never block a completed order
+
   await clearCart();
   revalidatePath('/cart');
   redirect(`/checkout/success?order=${order.id}`);

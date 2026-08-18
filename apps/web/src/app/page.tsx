@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getProducts, getCategories, getSettings, safe, type Product } from '@/lib/catalog';
 import { ProductCard } from '@/components/ProductCard';
+import { Hero } from '@/components/Hero';
 
 export const revalidate = 3600;
 
@@ -15,41 +16,11 @@ export default async function HomePage() {
 
   return (
     <div>
-      <section className="relative flex min-h-[72svh] items-end overflow-hidden bg-ink">
-        {settings.heroImage && (
-          <Image
-            src={settings.heroImage}
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover object-center opacity-80"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/20 to-transparent" />
-        <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6">
-          <h1 className="max-w-2xl text-2xl font-medium leading-relaxed text-cream sm:text-3xl">
-            {settings.heroTitle}
-          </h1>
-          {settings.heroSubtitle && (
-            <p className="mt-4 max-w-xl text-sm leading-7 text-cream/80">{settings.heroSubtitle}</p>
-          )}
-          <div className="mt-8 flex gap-4">
-            <Link
-              href="/collections"
-              className="bg-cream px-8 py-3 text-sm text-ink transition-colors hover:bg-sand hover:text-ink"
-            >
-              دیدن مجموعه‌ها
-            </Link>
-            <Link
-              href="/collections/new"
-              className="border border-cream/60 px-8 py-3 text-sm text-cream transition-colors hover:bg-cream hover:text-ink"
-            >
-              جدیدترین‌ها
-            </Link>
-          </div>
-        </div>
-      </section>
+      <Hero
+        image={settings.heroImage}
+        title={settings.heroTitle}
+        subtitle={settings.heroSubtitle}
+      />
 
       {categories.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6">

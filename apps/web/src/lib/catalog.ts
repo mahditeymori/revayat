@@ -5,7 +5,7 @@
 // Docker DATA_DIR is a bind mount. Writes are tmp+rename to avoid torn files.
 import { promises as fs } from 'fs';
 import path from 'path';
-import { normalizePersian } from './format';
+import { normalizePersian } from './format.ts';
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), 'data');
 
@@ -56,9 +56,18 @@ export type Order = {
 };
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
+  let raw: string;
   try {
-    return JSON.parse(await fs.readFile(path.join(DATA_DIR, file), 'utf8')) as T;
+    raw = await fs.readFile(path.join(DATA_DIR, file), 'utf8');
   } catch {
+    return fallback; // not created yet (e.g. orders.json before the first order)
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch (err) {
+    // A malformed file is a real problem — falling back silently makes the site
+    // look fine while serving default content. Loud, but still non-fatal.
+    console.error(`[catalog] ${file} is not valid JSON:`, err instanceof Error ? err.message : err);
     return fallback;
   }
 }
