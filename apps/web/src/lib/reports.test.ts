@@ -7,27 +7,41 @@ import type { Order } from './catalog.ts';
 
 const day = (back: number) => new Date(Date.now() - back * 86400_000).toISOString();
 
-const view = (visitor: string, back: number, path = '/', ref?: string): AnalyticsEvent => ({
+const view = (
+  visitor: string,
+  back: number,
+  path = '/',
+  ref?: string,
+  session?: string,
+): AnalyticsEvent => ({
   t: day(back),
   type: 'pageview',
   path,
   visitor,
+  session,
   ref,
 });
 
 test('traffic counts visitors, returning and sessions distinctly', () => {
   const t = traffic(
     [
-      view('a', 0), view('a', 0), // same visitor, same day -> 1 session
-      view('a', 1),               // same visitor, another day -> returning
-      view('b', 0),
+      view('a', 0, '/', undefined, 's1'),
+      view('a', 0, '/', undefined, 's1'), // same visit
+      view('a', 0, '/', undefined, 's2'), // came back after the 30min gap
+      view('a', 1, '/', undefined, 's3'), // another day -> returning
+      view('b', 0, '/', undefined, 's4'),
     ],
     7,
   );
-  assert.equal(t.pageviews, 4);
+  assert.equal(t.pageviews, 5);
   assert.equal(t.visitors, 2);
   assert.equal(t.returning, 1); // only "a" was seen on more than one day
-  assert.equal(t.sessions, 3);  // a×2 days + b×1 day
+  assert.equal(t.sessions, 4);  // two visits from a on day 0, not one
+});
+
+test('traffic falls back to visitor+day for events recorded before session ids', () => {
+  const t = traffic([view('a', 0), view('a', 0), view('a', 1), view('b', 0)], 7);
+  assert.equal(t.sessions, 3); // a×2 days + b×1 day — old data still counts
 });
 
 test('traffic byDay covers the whole window, zero-filled and oldest-first', () => {

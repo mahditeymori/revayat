@@ -184,6 +184,25 @@ docker compose up -d --force-recreate web
 Do the same in your laptop `.env`. Existing admin sessions are signed with the
 password, so they are invalidated by the change — log in again.
 
+## Analytics cookies
+
+Two first-party cookies, set by `/api/track`, both holding only a random opaque
+id — not derived from the IP, the user agent, or anything the visitor typed:
+
+| Cookie | Life | Purpose |
+|---|---|---|
+| `_rs` | 30 min, sliding | one session; the idle timeout *is* the expiry |
+| `_rv` | 180 days | new vs returning visitor |
+
+Both are `HttpOnly` + `SameSite=Lax`, and `Secure` whenever the request arrives
+over HTTPS. No third-party origins are involved, so the CSP is unchanged.
+
+If you change either lifetime in `src/lib/analytics.ts`, update the disclosure in
+`src/lib/pages.ts` (`/pages/privacy`) to match — it names both durations.
+
+Visitors who block cookies still get counted, via the daily-rotating hash
+fallback; they can only ever look "new," so the returning figure is a floor.
+
 ## Product images
 
 Uploads through the admin panel are capped at 5MB and served with a one-day
