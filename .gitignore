@@ -3,3 +3,6 @@ node_modules/
 .png
 *.log
 *.pem
+.env
+.env.local
+!.env.example

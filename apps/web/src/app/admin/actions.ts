@@ -10,10 +10,14 @@ import {
   saveSettings,
   updateOrderStatus,
   deleteOrder,
+  createProduct,
+  deleteProduct,
+  uniqueSlug,
   type OrderStatus,
   type Product,
 } from '@/lib/catalog';
-import { normalizeDigits } from '@/lib/format';
+import { saveUpload, deleteUploadDir } from '@/lib/uploads';
+import { normalizeDigits, slugifyPersian } from '@/lib/format';
 
 export type LoginState = { error: string | null };
 export type AdminActionState = { error: string | null; ok?: boolean };
@@ -50,6 +54,13 @@ function revalidateStore(): void {
 const num = (v: FormDataEntryValue | null): number =>
   Math.trunc(Number(normalizeDigits(String(v ?? '')).replace(/[^\d.-]/g, '')));
 
+const list = (v: FormDataEntryValue | null): string[] =>
+  String(v ?? '')
+    .split(/[،,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+/** id 0 (or absent) creates a new product; any other id edits that product. */
 export async function saveProductAction(
   _prev: AdminActionState,
   formData: FormData,
@@ -57,8 +68,8 @@ export async function saveProductAction(
   await requireAdmin();
   const id = num(formData.get('id'));
   const catalog = await getCatalog();
-  const existing = catalog.products.find((p) => p.id === id);
-  if (!existing) return { error: 'محصول پیدا نشد.' };
+  const existing = id ? catalog.products.find((p) => p.id === id) : undefined;
+  if (id && !existing) return { error: 'محصول پیدا نشد.' };
 
   const name = String(formData.get('name') ?? '').trim();
   const priceRial = num(formData.get('priceToman')) * 10;
@@ -69,35 +80,63 @@ export async function saveProductAction(
   if (salePriceRial !== null && salePriceRial >= priceRial)
     return { error: 'قیمت تخفیف‌دار باید کمتر از قیمت اصلی باشد.' };
 
-  const sizes = String(formData.get('sizes') ?? '')
-    .split(/[،,]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const sizes = list(formData.get('sizes'));
   if (sizes.length === 0) return { error: 'حداقل یک سایز وارد کنید.' };
 
-  const updated: Product = {
-    ...existing,
+  const category = String(formData.get('category') ?? existing?.category ?? '');
+  if (!catalog.categories.some((c) => c.slug === category))
+    return { error: 'دسته‌بندی نامعتبر است.' };
+
+  const slug = existing?.slug ?? (await uniqueSlug(slugifyPersian(name) || 'product'));
+
+  // Images kept = whatever the form still lists, plus any newly uploaded files.
+  const kept = formData.getAll('existingImages').map(String).filter(Boolean);
+  const uploads = formData.getAll('images').filter((f): f is File => f instanceof File && f.size > 0);
+  const added: string[] = [];
+  for (const [i, file] of uploads.entries()) {
+    const result = await saveUpload(file, slug, kept.length + i);
+    if (!result.ok) return { error: result.error };
+    added.push(result.url);
+  }
+  const images = [...kept, ...added];
+  if (images.length === 0) return { error: 'حداقل یک تصویر لازم است.' };
+
+  const fields = {
     name,
+    slug,
     subtitle: String(formData.get('subtitle') ?? '').trim().slice(0, 200),
     description: String(formData.get('description') ?? '').trim().slice(0, 2000),
     priceRial,
     salePriceRial,
+    images,
     sizes,
-    colors: String(formData.get('colors') ?? '')
-      .split(/[،,]/)
-      .map((s) => s.trim())
-      .filter(Boolean),
-    category: String(formData.get('category') ?? existing.category),
+    colors: list(formData.get('colors')),
+    category,
     inStock: formData.get('inStock') === 'on',
     featured: formData.get('featured') === 'on',
   };
 
+  if (!existing) {
+    const created = await createProduct(fields);
+    revalidateStore();
+    redirect(`/admin/products/${created.id}`);
+  }
+
   await saveCatalog({
     ...catalog,
-    products: catalog.products.map((p) => (p.id === id ? updated : p)),
+    products: catalog.products.map((p) => (p.id === id ? ({ ...p, ...fields } as Product) : p)),
   });
   revalidateStore();
   return { error: null, ok: true };
+}
+
+export async function deleteProductAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const removed = await deleteProduct(num(formData.get('id')));
+  if (removed) await deleteUploadDir(removed.slug);
+  revalidateStore();
+  revalidatePath('/admin/products');
+  redirect('/admin');
 }
 
 export async function updateOrderStatusAction(formData: FormData): Promise<void> {

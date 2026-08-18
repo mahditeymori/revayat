@@ -132,6 +132,29 @@ export async function getCategories(): Promise<(Category & { count: number; imag
   });
 }
 
+export async function uniqueSlug(base: string, ignoreId?: number): Promise<string> {
+  const { products } = await getCatalog();
+  const taken = new Set(products.filter((p) => p.id !== ignoreId).map((p) => p.slug));
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
+}
+
+export async function createProduct(p: Omit<Product, 'id'>): Promise<Product> {
+  const catalog = await getCatalog();
+  const id = Math.max(0, ...catalog.products.map((x) => x.id)) + 1;
+  const product: Product = { ...p, id };
+  await saveCatalog({ ...catalog, products: [...catalog.products, product] });
+  return product;
+}
+
+export async function deleteProduct(id: number): Promise<Product | null> {
+  const catalog = await getCatalog();
+  const product = catalog.products.find((p) => p.id === id);
+  if (!product) return null;
+  await saveCatalog({ ...catalog, products: catalog.products.filter((p) => p.id !== id) });
+  return product;
+}
+
 export async function getRelated(product: Product, limit = 4): Promise<Product[]> {
   const { products } = await getCatalog();
   const same = products.filter((p) => p.category === product.category && p.id !== product.id);

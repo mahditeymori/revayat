@@ -8,7 +8,12 @@ export default async function AdminProductsPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-medium">محصولات</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-medium">محصولات</h1>
+        <Link href="/admin/products/new" className="bg-ink px-5 py-3 text-xs text-cream hover:bg-sand-dark">
+          محصول جدید
+        </Link>
+      </div>
       <ul className="mt-6 divide-y divide-cream-200 border border-cream-200">
         {products.map((p) => (
           <li key={p.id}>
