@@ -6,6 +6,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { normalizePersian } from './format.ts';
+import { DEFAULT_SUPPORT_CONTENT, type SupportContent } from './faq.ts';
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), 'data');
 
@@ -95,6 +96,10 @@ const DEFAULT_SETTINGS: Settings = {
 export const getSettings = (): Promise<Settings> =>
   readJson('settings.json', DEFAULT_SETTINGS).then((s) => ({ ...DEFAULT_SETTINGS, ...s }));
 export const saveSettings = (s: Settings): Promise<void> => writeJson('settings.json', s);
+
+export const getSupportContent = (): Promise<SupportContent> =>
+  readJson('support.json', DEFAULT_SUPPORT_CONTENT).then((s) => ({ ...DEFAULT_SUPPORT_CONTENT, ...s }));
+export const saveSupportContent = (s: SupportContent): Promise<void> => writeJson('support.json', s);
 
 /** Effective sale price helpers. A sale is only real when below the regular price. */
 export const effectivePrice = (p: Product): number =>

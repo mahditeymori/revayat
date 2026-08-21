@@ -1,9 +1,20 @@
-// Local FAQ knowledge base for the support widget (components/SupportWidget.tsx).
+// Support content shape + matcher for the support widget (components/SupportWidget.tsx).
 // No external AI call — matching is plain keyword scoring, so answering stays
-// fast and free of server/API load. Add new entries here; no code changes needed.
+// fast and free of server/API load. Content is admin-editable (see lib/catalog.ts
+// getSupportContent/saveSupportContent) — DEFAULT_SUPPORT_CONTENT below is only
+// the seed used before an admin ever saves, and the fallback if support.json
+// is missing or malformed. This file has no server-only imports (no `fs`) so
+// the client-side SupportWidget can import its types directly.
 export type FaqEntry = { id: string; question: string; keywords: string[]; answer: string };
+export type SupportContent = {
+  title: string;
+  description: string;
+  greeting: string;
+  fallback: string;
+  faqs: FaqEntry[];
+};
 
-export const faqEntries: FaqEntry[] = [
+export const DEFAULT_FAQ_ENTRIES: FaqEntry[] = [
   {
     id: 'shipping-time',
     question: 'ارسال سفارش چقدر طول می‌کشد؟',
@@ -81,6 +92,15 @@ export const faqEntries: FaqEntry[] = [
   },
 ];
 
+export const DEFAULT_SUPPORT_CONTENT: SupportContent = {
+  title: 'پشتیبانی روایت',
+  description: 'سؤال خود را بپرسید یا یکی از موارد زیر را انتخاب کنید.',
+  greeting: 'سلام! من دستیار پشتیبانی روایت هستم. سؤال خود را بپرسید یا یکی از موارد زیر را انتخاب کنید.',
+  fallback:
+    'متأسفانه پاسخ مناسبی برای این پرسش پیدا نکردم. لطفاً سؤال را به شکل دیگری بپرسید یا از صفحه تماس با ما با پشتیبانی در ارتباط باشید.',
+  faqs: DEFAULT_FAQ_ENTRIES,
+};
+
 const STOPWORD_MIN_LEN = 2;
 
 function normalize(text: string): string {
@@ -88,8 +108,10 @@ function normalize(text: string): string {
 }
 
 // Plain keyword-overlap scoring — no model, no network call. Runs client-side
-// in well under a millisecond for this list size.
-export function findAnswer(rawQuery: string): FaqEntry | null {
+// in well under a millisecond for this list size. Takes entries as a param
+// (rather than reading the module constant) so it works against whatever the
+// admin has saved, not just the seed data.
+export function findAnswer(rawQuery: string, entries: FaqEntry[]): FaqEntry | null {
   const query = normalize(rawQuery);
   if (!query) return null;
   const words = query.split(' ').filter((w) => w.length >= STOPWORD_MIN_LEN);
@@ -97,7 +119,7 @@ export function findAnswer(rawQuery: string): FaqEntry | null {
 
   let best: FaqEntry | null = null;
   let bestScore = 0;
-  for (const entry of faqEntries) {
+  for (const entry of entries) {
     const haystack = normalize(`${entry.question} ${entry.keywords.join(' ')}`);
     let score = words.reduce((acc, w) => acc + (haystack.includes(w) ? 1 : 0), 0);
     if (haystack.includes(query)) score += 2; // whole-phrase match, e.g. a suggested question clicked verbatim

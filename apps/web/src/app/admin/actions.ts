@@ -8,6 +8,8 @@ import {
   saveCatalog,
   getSettings,
   saveSettings,
+  getSupportContent,
+  saveSupportContent,
   updateOrderStatus,
   deleteOrder,
   createProduct,
@@ -16,6 +18,7 @@ import {
   type OrderStatus,
   type Product,
 } from '@/lib/catalog';
+import type { FaqEntry } from '@/lib/faq';
 import { saveUpload, deleteUploadDir } from '@/lib/uploads';
 import { normalizeDigits, slugifyPersian } from '@/lib/format';
 
@@ -179,5 +182,50 @@ export async function saveSettingsAction(
     footerText: text('footerText', 500),
   });
   revalidateStore();
+  return { error: null, ok: true };
+}
+
+/**
+ * FAQ rows arrive as parallel arrays (repeated `faqQuestion`, `faqKeywords`,
+ * `faqAnswer` inputs — one triple per row) rather than a single delimited
+ * field, so admins can add/remove rows freely in the form.
+ */
+export async function saveSupportContentAction(
+  _prev: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  await requireAdmin();
+  const text = (name: string, max: number) => String(formData.get(name) ?? '').trim().slice(0, max);
+
+  const title = text('title', 100);
+  const greeting = text('greeting', 300);
+  const fallback = text('fallback', 300);
+  if (!title || !greeting || !fallback) return { error: 'عنوان، پیام خوش‌آمد و پیام پیش‌فرض را وارد کنید.' };
+
+  const questions = formData.getAll('faqQuestion').map((v) => String(v).trim());
+  const keywordsList = formData.getAll('faqKeywords').map((v) => list(v));
+  const answers = formData.getAll('faqAnswer').map((v) => String(v).trim());
+
+  const faqs: FaqEntry[] = [];
+  const usedIds = new Set<string>();
+  for (let i = 0; i < questions.length; i++) {
+    const question = questions[i].slice(0, 200);
+    const answer = (answers[i] ?? '').trim().slice(0, 2000);
+    if (!question || !answer) continue; // skip blank rows silently — the UI never submits a half-filled row on purpose
+    let id = slugifyPersian(question).slice(0, 60) || `faq-${i}`;
+    while (usedIds.has(id)) id = `${id}-${i}`;
+    usedIds.add(id);
+    faqs.push({ id, question, keywords: keywordsList[i] ?? [], answer });
+  }
+  if (faqs.length === 0) return { error: 'حداقل یک پرسش و پاسخ کامل وارد کنید.' };
+
+  await saveSupportContent({
+    title,
+    description: text('description', 300),
+    greeting,
+    fallback,
+    faqs,
+  });
+  revalidatePath('/', 'layout');
   return { error: null, ok: true };
 }

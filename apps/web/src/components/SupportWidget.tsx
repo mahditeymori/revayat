@@ -1,23 +1,20 @@
 'use client';
 
-// FAQ-based support chat. Answers come from the local knowledge base in
-// lib/faq.ts via plain keyword matching — no model call, no server request,
-// so it costs nothing beyond the client bundle. Update lib/faq.ts to add
-// or change answers; no code change needed here.
+// FAQ-based support chat. Answers come from support content edited in the
+// admin panel (admin/support) and passed down as props from layout.tsx — no
+// model call, no client-side network request, so it costs nothing beyond
+// keyword matching over an already-fetched array.
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { findAnswer, faqEntries } from '@/lib/faq';
+import { findAnswer, type SupportContent } from '@/lib/faq';
 
 type Message = { role: 'user' | 'bot'; text: string };
 
-const FALLBACK =
-  'متأسفانه پاسخ مناسبی برای این پرسش پیدا نکردم. لطفاً سؤال را به شکل دیگری بپرسید یا از صفحه تماس با ما با پشتیبانی در ارتباط باشید.';
-const GREETING = 'سلام! من دستیار پشتیبانی روایت هستم. سؤال خود را بپرسید یا یکی از موارد زیر را انتخاب کنید.';
-const SUGGESTIONS = faqEntries.slice(0, 4);
-
-export function SupportWidget() {
+export function SupportWidget({ content }: { content: SupportContent }) {
+  const { title, greeting, fallback, faqs } = content;
+  const suggestions = faqs.slice(0, 4);
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([{ role: 'bot', text: GREETING }]);
+  const [messages, setMessages] = useState<Message[]>([{ role: 'bot', text: greeting }]);
   const [input, setInput] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -28,11 +25,11 @@ export function SupportWidget() {
   function ask(question: string) {
     const q = question.trim();
     if (!q) return;
-    const match = findAnswer(q);
+    const match = findAnswer(q, faqs);
     setMessages((prev) => [
       ...prev,
       { role: 'user', text: q },
-      { role: 'bot', text: match?.answer ?? FALLBACK },
+      { role: 'bot', text: match?.answer ?? fallback },
     ]);
     setInput('');
   }
@@ -47,7 +44,7 @@ export function SupportWidget() {
           className="mb-3 flex h-[28rem] w-[20rem] flex-col border border-cream-200 bg-cream shadow-[0_4px_24px_rgba(19,17,16,0.15)] sm:w-[22rem]"
         >
           <div className="flex items-center justify-between border-b border-cream-200 bg-ink px-4 py-3">
-            <p className="text-sm text-cream">پشتیبانی روایت</p>
+            <p className="text-sm text-cream">{title}</p>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -73,7 +70,7 @@ export function SupportWidget() {
             ))}
             {messages.length === 1 && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {SUGGESTIONS.map((s) => (
+                {suggestions.map((s) => (
                   <button
                     key={s.id}
                     type="button"

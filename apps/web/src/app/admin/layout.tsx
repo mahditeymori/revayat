@@ -12,6 +12,7 @@ const NAV = [
   { href: '/admin/orders', label: 'سفارش‌ها' },
   { href: '/admin/analytics', label: 'آمار' },
   { href: '/admin/settings', label: 'تنظیمات سایت' },
+  { href: '/admin/support', label: 'پشتیبانی' },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
