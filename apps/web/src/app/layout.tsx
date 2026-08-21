@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { site, nav } from '@/lib/site';
 import { getSettings, safe } from '@/lib/catalog';
@@ -73,8 +74,8 @@ function Header() {
           <Link href="/search" className="hover:text-sand-dark">
             جستجو
           </Link>
-          <Link href="/cart" className="relative hover:text-sand-dark">
-            سبد خرید
+          <Link href="/cart" className="relative flex items-center hover:opacity-75" aria-label="سبد خرید">
+            <Image src="/cart-icon.png" alt="" width={24} height={24} className="h-6 w-6" />
             <CartBadge />
           </Link>
         </div>
@@ -133,6 +134,22 @@ function Footer({ footerText }: { footerText?: string }) {
             </li>
           </ul>
         </nav>
+      </div>
+      <div className="flex justify-center border-t border-cream-200 px-4 py-6 sm:px-6">
+        <a
+          href="https://trustseal.enamad.ir/?id=7309998&Code=KuXSFrNV4gLtk6oWJRveFSxjBZKmjkEk"
+          target="_blank"
+          rel="noopener"
+          referrerPolicy="origin"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- Enamad badge must be served unmodified */}
+          <img
+            src="https://trustseal.enamad.ir/logo.aspx?id=7309998&Code=KuXSFrNV4gLtk6oWJRveFSxjBZKmjkEk"
+            alt="نماد اعتماد الکترونیکی"
+            referrerPolicy="origin"
+            className="h-24 w-24"
+          />
+        </a>
       </div>
       <div className="border-t border-cream-200 px-4 py-6 text-center text-xs text-ink-60 sm:px-6">
         © {new Date().getFullYear()} {site.name} — تمامی حقوق محفوظ است.
