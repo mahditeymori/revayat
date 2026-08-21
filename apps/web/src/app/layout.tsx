@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { site, nav } from '@/lib/site';
-import { getSettings, safe } from '@/lib/catalog';
+import { getSettings, getSupportContent, safe } from '@/lib/catalog';
+import { DEFAULT_SUPPORT_CONTENT } from '@/lib/faq';
 import { CartBadge } from '@/components/CartBadge';
 import { Track } from '@/components/Track';
 import { ConsentBanner } from '@/components/ConsentBanner';
@@ -67,6 +68,7 @@ const websiteJsonLd = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const settings = await safe(getSettings(), null);
+  const supportContent = await safe(getSupportContent(), DEFAULT_SUPPORT_CONTENT);
   return (
     <html lang="fa" dir="rtl">
       <body className="flex min-h-screen flex-col bg-cream text-ink antialiased">
@@ -94,7 +96,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Footer footerText={settings?.footerText} />
         <Track />
         <ConsentBanner />
-        <SupportWidget />
+        <SupportWidget content={supportContent} />
       </body>
     </html>
   );
@@ -177,11 +179,11 @@ function Footer({ footerText }: { footerText?: string }) {
               </Link>
             </li>
           </ul>
+          <div className="mt-6 border-t border-cream-200 pt-6">
+            <p className="mb-3 text-xs font-medium text-ink-60">نماد اعتماد</p>
+            <EnamadBadge size={72} />
+          </div>
         </nav>
-        <div>
-          <p className="mb-4 text-sm font-medium">نماد اعتماد</p>
-          <EnamadBadge />
-        </div>
       </div>
       <div className="border-t border-cream-200 px-4 py-6 text-center text-xs text-ink-60 sm:px-6">
         © {new Date().getFullYear()} {site.name} — تمامی حقوق محفوظ است.
