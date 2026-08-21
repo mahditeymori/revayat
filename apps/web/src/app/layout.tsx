@@ -6,6 +6,8 @@ import { getSettings, safe } from '@/lib/catalog';
 import { CartBadge } from '@/components/CartBadge';
 import { Track } from '@/components/Track';
 import { ConsentBanner } from '@/components/ConsentBanner';
+import { SupportWidget } from '@/components/SupportWidget';
+import { EnamadBadge } from '@/components/EnamadBadge';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -51,6 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Footer footerText={settings?.footerText} />
         <Track />
         <ConsentBanner />
+        <SupportWidget />
       </body>
     </html>
   );
@@ -134,22 +137,10 @@ function Footer({ footerText }: { footerText?: string }) {
             </li>
           </ul>
         </nav>
-      </div>
-      <div className="flex justify-center border-t border-cream-200 px-4 py-6 sm:px-6">
-        <a
-          href="https://trustseal.enamad.ir/?id=7309998&Code=KuXSFrNV4gLtk6oWJRveFSxjBZKmjkEk"
-          target="_blank"
-          rel="noopener"
-          referrerPolicy="origin"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- Enamad badge must be served unmodified */}
-          <img
-            src="https://trustseal.enamad.ir/logo.aspx?id=7309998&Code=KuXSFrNV4gLtk6oWJRveFSxjBZKmjkEk"
-            alt="نماد اعتماد الکترونیکی"
-            referrerPolicy="origin"
-            className="h-24 w-24"
-          />
-        </a>
+        <div>
+          <p className="mb-4 text-sm font-medium">نماد اعتماد</p>
+          <EnamadBadge />
+        </div>
       </div>
       <div className="border-t border-cream-200 px-4 py-6 text-center text-xs text-ink-60 sm:px-6">
         © {new Date().getFullYear()} {site.name} — تمامی حقوق محفوظ است.

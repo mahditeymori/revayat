@@ -14,6 +14,7 @@ import { formatToman, discountPercent } from '@/lib/format';
 import { site } from '@/lib/site';
 import { ProductCard } from '@/components/ProductCard';
 import { ProductGallery } from '@/components/ProductGallery';
+import { EnamadBadge } from '@/components/EnamadBadge';
 import { AddToCartForm } from './AddToCartForm';
 
 export const revalidate = 300;
@@ -112,6 +113,11 @@ export default async function ProductPage({ params }: Props) {
 
           <div className="mt-8">
             <AddToCartForm product={product} />
+          </div>
+
+          <div className="mt-4 flex items-center gap-2">
+            <EnamadBadge size={52} />
+            <p className="text-xs text-ink-60">خرید ۱۰۰٪ امن — دارای نماد اعتماد الکترونیکی</p>
           </div>
 
           <div className="mt-10 space-y-6 border-t border-cream-200 pt-8 text-sm leading-8 text-ink-60">
