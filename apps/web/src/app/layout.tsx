@@ -133,11 +133,14 @@ function Header() {
 function Footer({ footerText }: { footerText?: string }) {
   return (
     <footer className="mt-24 border-t border-cream-200 bg-cream-50">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-4">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-5">
         <div className="md:col-span-2">
           <p className="wordmark text-base">{site.name}</p>
-          <p className="mt-4 max-w-sm text-sm leading-8 text-ink-60">{footerText || site.description}</p>
+          <p className="mt-4 max-w-sm text-sm leading-8 text-ink-60">
+            {footerText || site.description}
+          </p>
         </div>
+
         <nav aria-label="فوتر" className="text-sm">
           <p className="mb-4 font-medium">خرید</p>
           <ul className="space-y-3 text-ink-60">
@@ -150,6 +153,7 @@ function Footer({ footerText }: { footerText?: string }) {
             ))}
           </ul>
         </nav>
+
         <nav aria-label="پشتیبانی" className="text-sm">
           <p className="mb-4 font-medium">پشتیبانی</p>
           <ul className="space-y-3 text-ink-60">
@@ -179,12 +183,15 @@ function Footer({ footerText }: { footerText?: string }) {
               </Link>
             </li>
           </ul>
-          <div className="mt-6 border-t border-cream-200 pt-6">
-            <p className="mb-3 text-xs font-medium text-ink-60">نماد اعتماد</p>
-            <EnamadBadge size={72} />
-          </div>
         </nav>
+
+        {/* Enamad کنار خرید و پشتیبانی */}
+        <div className="text-sm">
+          <p className="mb-4 font-medium">اعتماد</p>
+          <EnamadBadge size={72} />
+        </div>
       </div>
+
       <div className="border-t border-cream-200 px-4 py-6 text-center text-xs text-ink-60 sm:px-6">
         © {new Date().getFullYear()} {site.name} — تمامی حقوق محفوظ است.
       </div>
