@@ -119,7 +119,7 @@ export function ProductGallery({ images, name }: { images: string[]; name: strin
             type="button"
             onClick={() => setZoomed(false)}
             aria-label="بستن"
-            className="absolute left-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-cream/10 text-2xl text-cream backdrop-blur transition-colors hover:bg-cream/20"
+            className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-cream/10 text-2xl text-cream backdrop-blur transition-colors hover:bg-cream/20"
           >
             ×
           </button>
