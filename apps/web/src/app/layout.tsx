@@ -12,17 +12,25 @@ import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
-  title: { default: `${site.name} | ${site.tagline}`, template: `%s | ${site.name}` },
+  title: { default: `${site.nameFa} | ${site.tagline}`, template: `%s | ${site.nameFa}` },
   description: site.description,
   alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     locale: site.locale,
-    siteName: site.name,
-    title: site.name,
+    siteName: site.nameFa,
+    title: `${site.nameFa} | ${site.tagline}`,
     description: site.description,
     url: site.url,
+    images: [{ url: site.logo, width: 1254, height: 1254, alt: site.nameFa }],
   },
+  twitter: {
+    card: 'summary',
+    title: `${site.nameFa} | ${site.tagline}`,
+    description: site.description,
+    images: [site.logo],
+  },
+  icons: { icon: '/icon.jpg', shortcut: '/icon.jpg', apple: '/icon.jpg' },
   robots: { index: true, follow: true, 'max-image-preview': 'large' },
 };
 
@@ -32,11 +40,44 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+// Organization + WebSite schema, rendered on every page. This is what tells
+// Google "روایت شاپ" (the Persian brand name) and "REVAYAT" (the wordmark)
+// both refer to this same site/entity — Organization.name carries the brand,
+// alternateName covers the Latin form, and WebSite ties both to site.url.
+const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: site.nameFa,
+  alternateName: site.name,
+  url: site.url,
+  logo: `${site.url}${site.logo}`,
+  description: site.description,
+  sameAs: [site.socials.instagram],
+};
+
+const websiteJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: site.nameFa,
+  alternateName: site.name,
+  url: site.url,
+  inLanguage: 'fa-IR',
+  publisher: { '@type': 'Organization', name: site.nameFa },
+};
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const settings = await safe(getSettings(), null);
   return (
     <html lang="fa" dir="rtl">
       <body className="flex min-h-screen flex-col bg-cream text-ink antialiased">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:absolute focus:right-4 focus:top-4 focus:z-50 focus:bg-ink focus:px-4 focus:py-2 focus:text-cream"
