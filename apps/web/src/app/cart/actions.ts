@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addToCart, updateCartItem, getCart, clearCart } from '@/lib/cart';
 import { getCatalog, createOrder, effectivePrice, type OrderItem } from '@/lib/catalog';
+import { startPayment } from '@/lib/payment-flow';
 import { cookies } from 'next/headers';
 import { record, CONSENT_COOKIE } from '@/lib/analytics';
 import { normalizeDigits } from '@/lib/format';
@@ -85,24 +86,17 @@ export async function submitCheckoutAction(formData: FormData): Promise<void> {
 
   const order = await createOrder(customer, items);
 
-  // Recorded server-side: a client beacon would miss orders whenever the
-  // success redirect is interrupted, and could be forged from the browser.
-  //
-  // `consented` is what keeps the funnel honest. add_to_cart only exists for
-  // visitors who accepted, so counting every purchase against it would let
-  // cart→order exceed 100%. The flag never identifies the buyer — it is one bit
-  // saying which population this row belongs to.
-  const consent = (await cookies()).get(CONSENT_COOKIE)?.value;
-  await record({
-    t: new Date().toISOString(),
-    type: 'purchase',
-    path: '/checkout',
-    visitor: 'server',
-    value: order.totalRial,
-    consented: consent === 'yes',
-  }).catch(() => {}); // analytics must never block a completed order
+  // Hand off to Zibal before the cart is cleared and before anything is counted
+  // as a purchase: nothing about this order is final until the money arrives.
+  // If the gateway is down the order still exists, so the customer can retry
+  // from the failure page instead of re-entering the whole form.
+  const payment = await startPayment(order);
+  if (!payment.ok) {
+    redirect(`/payment/failed?order=${order.id}&reason=${encodeURIComponent(payment.message)}`);
+  }
 
-  await clearCart();
-  revalidatePath('/cart');
-  redirect(`/checkout/success?order=${order.id}`);
+  // The cart is deliberately NOT cleared here. The customer is about to leave
+  // for the bank and may cancel or fail; an emptied cart would strand them with
+  // nothing to go back to. /payment/callback clears it once the money lands.
+  redirect(payment.redirectUrl);
 }

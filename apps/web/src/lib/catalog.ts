@@ -3,12 +3,9 @@
 // settings.json (hero/announcement texts), orders.json (created at first order).
 // Files are the source of truth so the admin panel edits survive restarts; in
 // Docker DATA_DIR is a bind mount. Writes are tmp+rename to avoid torn files.
-import { promises as fs } from 'fs';
-import path from 'path';
 import { normalizePersian } from './format.ts';
 import { DEFAULT_SUPPORT_CONTENT, type SupportContent } from './faq.ts';
-
-const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), 'data');
+import { readJson as readStore, writeJson as writeStore, mutate } from './store.ts';
 
 export type Product = {
   id: number;
@@ -47,6 +44,13 @@ export type OrderItem = {
   quantity: number;
   priceRial: number;
 };
+/**
+ * Where an order stands with the payment gateway. Distinct from OrderStatus,
+ * which is about fulfilment: an order can be 'paid' but still 'new' to ship.
+ * 'awaiting' = order created, the user has not returned from the bank yet.
+ */
+export type PaymentState = 'unpaid' | 'awaiting' | 'paid' | 'failed';
+
 export type Order = {
   id: number;
   createdAt: string;
@@ -54,31 +58,18 @@ export type Order = {
   customer: { name: string; phone: string; email: string; state: string; city: string; address: string; postcode: string };
   items: OrderItem[];
   totalRial: number;
+  /** Absent on orders placed before the gateway existed - read via orderPaymentState(). */
+  paymentState?: PaymentState;
+  /** trackId of the payment attempt that succeeded, for cross-referencing payments.json. */
+  paidTrackId?: string | null;
+  paidAt?: string | null;
 };
 
-async function readJson<T>(file: string, fallback: T): Promise<T> {
-  let raw: string;
-  try {
-    raw = await fs.readFile(path.join(DATA_DIR, file), 'utf8');
-  } catch {
-    return fallback; // not created yet (e.g. orders.json before the first order)
-  }
-  try {
-    return JSON.parse(raw) as T;
-  } catch (err) {
-    // A malformed file is a real problem — falling back silently makes the site
-    // look fine while serving default content. Loud, but still non-fatal.
-    console.error(`[catalog] ${file} is not valid JSON:`, err instanceof Error ? err.message : err);
-    return fallback;
-  }
-}
+/** Orders written before the payment gateway existed have no paymentState. */
+export const orderPaymentState = (o: Order): PaymentState => o.paymentState ?? 'unpaid';
 
-async function writeJson(file: string, data: unknown): Promise<void> {
-  const target = path.join(DATA_DIR, file);
-  const tmp = `${target}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-  await fs.rename(tmp, target);
-}
+const readJson = <T,>(file: string, fallback: T): Promise<T> => readStore(file, fallback, 'catalog');
+const writeJson = (file: string, data: unknown): Promise<void> => writeStore(file, data);
 
 const EMPTY_CATALOG: Catalog = { categories: [], products: [] };
 
@@ -177,39 +168,74 @@ export async function getRelated(product: Product, limit = 4): Promise<Product[]
 }
 
 // --- Orders ---------------------------------------------------------------
+//
+// Order ids double as the Zibal orderId, so they must never be reused. Every
+// mutation goes through mutate() to serialise read-modify-write: a payment
+// callback marking an order paid can otherwise race an admin status change and
+// one of the two writes is lost.
 
-export const listOrders = (): Promise<Order[]> => readJson<Order[]>('orders.json', []);
+const ORDERS = 'orders.json';
 
-export async function createOrder(
-  customer: Order['customer'],
-  items: OrderItem[],
-): Promise<Order> {
+export const listOrders = (): Promise<Order[]> => readJson<Order[]>(ORDERS, []);
+
+export async function getOrder(id: number): Promise<Order | null> {
   const orders = await listOrders();
-  const order: Order = {
-    id: (orders.at(-1)?.id ?? 1000) + 1,
-    createdAt: new Date().toISOString(),
-    status: 'new',
-    customer,
-    items,
-    totalRial: items.reduce((sum, i) => sum + i.priceRial * i.quantity, 0),
-  };
-  await writeJson('orders.json', [...orders, order]);
-  return order;
+  return orders.find((o) => o.id === id) ?? null;
 }
 
-export async function updateOrderStatus(id: number, status: OrderStatus): Promise<void> {
-  const orders = await listOrders();
-  await writeJson(
-    'orders.json',
-    orders.map((o) => (o.id === id ? { ...o, status } : o)),
+export function createOrder(customer: Order['customer'], items: OrderItem[]): Promise<Order> {
+  return mutate<Order[], Order>(
+    ORDERS,
+    [],
+    (orders) => {
+      const order: Order = {
+        // max, not last: a deleted trailing order must not free its id for
+        // reuse, or a stale Zibal callback could be applied to a new order.
+        id: Math.max(1000, ...orders.map((o) => o.id)) + 1,
+        createdAt: new Date().toISOString(),
+        status: 'new',
+        customer,
+        items,
+        totalRial: items.reduce((sum, i) => sum + i.priceRial * i.quantity, 0),
+        paymentState: 'unpaid',
+        paidTrackId: null,
+        paidAt: null,
+      };
+      return [[...orders, order], order];
+    },
+    'catalog',
   );
 }
 
-export async function deleteOrder(id: number): Promise<void> {
-  const orders = await listOrders();
-  await writeJson(
-    'orders.json',
-    orders.filter((o) => o.id !== id),
+const patchOrder = (id: number, patch: Partial<Order>): Promise<Order | null> =>
+  mutate<Order[], Order | null>(
+    ORDERS,
+    [],
+    (orders) => {
+      const idx = orders.findIndex((o) => o.id === id);
+      if (idx === -1) return [orders, null];
+      const next = orders.slice();
+      next[idx] = { ...next[idx], ...patch };
+      return [next, next[idx]];
+    },
+    'catalog',
+  );
+
+export const updateOrderStatus = (id: number, status: OrderStatus): Promise<Order | null> =>
+  patchOrder(id, { status });
+
+export const setOrderPaymentState = (
+  id: number,
+  paymentState: PaymentState,
+  extra: { paidTrackId?: string | null; paidAt?: string | null } = {},
+): Promise<Order | null> => patchOrder(id, { paymentState, ...extra });
+
+export function deleteOrder(id: number): Promise<void> {
+  return mutate<Order[], void>(
+    ORDERS,
+    [],
+    (orders) => [orders.filter((o) => o.id !== id), undefined],
+    'catalog',
   );
 }
 
