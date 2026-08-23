@@ -8,6 +8,8 @@ services:
     environment:
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # Zibal merchant id. Server-side only — never NEXT_PUBLIC_.
+      ZIBAL_MERCHANT: ${ZIBAL_MERCHANT}
       DATA_DIR: /app/data
     volumes:
       # Production data: catalog JSON, orders, and uploaded product images.

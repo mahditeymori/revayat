@@ -8,65 +8,20 @@
 // Money is integer Rial everywhere, matching the rest of the codebase
 // (see format.ts) - Zibal's `amount` is also Rial, so no conversion happens.
 import 'server-only';
-import { headers } from 'next/headers';
-import { site } from './site.ts';
+import {
+  SANDBOX_MERCHANT,
+  isPayableAmount,
+  resultMessage,
+} from './zibal-codes.ts';
+
+// The code tables and the pure verify decision live in zibal-codes.ts so they
+// stay testable without a request scope; re-exported here so callers need only
+// this module.
+export * from './zibal-codes.ts';
 
 const BASE = 'https://gateway.zibal.ir';
 
-/** Zibal's public sandbox merchant. Real money never moves through it. */
-export const SANDBOX_MERCHANT = 'zibal';
-
-/** Zibal rejects anything at or below 1,000 Rial with result 105. */
-export const MIN_AMOUNT_RIAL = 1_000;
-
 const TIMEOUT_MS = 20_000;
-
-// --- Result codes (the `result` field on every response) -------------------
-
-export const RESULT_MESSAGES: Record<number, string> = {
-  100: 'با موفقیت انجام شد.',
-  102: 'پذیرنده یافت نشد.',
-  103: 'پذیرنده غیرفعال است.',
-  104: 'پذیرنده نامعتبر است.',
-  105: 'مبلغ باید بیشتر از ۱٬۰۰۰ ریال باشد.',
-  106: 'آدرس بازگشت نامعتبر است.',
-  113: 'مبلغ تراکنش از سقف مجاز بیشتر است.',
-  201: 'این تراکنش پیش‌تر تأیید شده است.',
-  202: 'پرداخت انجام نشده یا ناموفق بوده است.',
-  203: 'شناسه پیگیری نامعتبر است.',
-};
-
-export const resultMessage = (code: number): string =>
-  RESULT_MESSAGES[code] ?? `خطای نامشخص درگاه (کد ${code}).`;
-
-// --- Transaction status codes (the `status` field) -------------------------
-
-export const STATUS_MESSAGES: Record<number, string> = {
-  [-1]: 'در انتظار پرداخت.',
-  [-2]: 'خطای داخلی درگاه.',
-  1: 'پرداخت شده — تأیید شده.',
-  2: 'پرداخت شده — تأیید نشده.',
-  3: 'پرداخت توسط کاربر لغو شد.',
-  4: 'شماره کارت نامعتبر است.',
-  5: 'موجودی حساب کافی نیست.',
-  6: 'رمز واردشده اشتباه است.',
-  7: 'تعداد درخواست‌ها بیش از حد مجاز است.',
-  8: 'تعداد پرداخت اینترنتی روزانه بیش از حد مجاز است.',
-  9: 'مبلغ پرداخت اینترنتی روزانه بیش از حد مجاز است.',
-  10: 'صادرکننده‌ی کارت نامعتبر است.',
-  11: 'خطای سوییچ بانکی — کمی بعد دوباره تلاش کنید.',
-  12: 'کارت قابل دسترسی نیست.',
-};
-
-export const statusMessage = (code: number | null | undefined): string =>
-  code == null ? '' : (STATUS_MESSAGES[code] ?? `وضعیت نامشخص (کد ${code}).`);
-
-/** 1 = paid & verified, 2 = paid but not yet verified. Anything else is not money in hand. */
-export const isPaidStatus = (status: number | null | undefined): boolean =>
-  status === 1 || status === 2;
-
-/** The user pressed cancel on the bank page - not an error worth alarming them about. */
-export const isCanceledStatus = (status: number | null | undefined): boolean => status === 3;
 
 // --- Wire types ------------------------------------------------------------
 
@@ -122,28 +77,6 @@ export function merchantId(): string {
 export const isConfigured = (): boolean => Boolean(process.env.ZIBAL_MERCHANT?.trim());
 
 export const isSandbox = (): boolean => process.env.ZIBAL_MERCHANT?.trim() === SANDBOX_MERCHANT;
-
-/**
- * Absolute https origin for callbackUrl. Zibal rejects relative URLs (result
- * 106) and the browser is bounced back here from the bank, so this must be the
- * public origin - taken from the proxy headers so local and staging hosts work,
- * with the canonical site URL as the fallback.
- */
-export async function callbackUrl(): Promise<string> {
-  let origin = site.url;
-  try {
-    const h = await headers();
-    const host = h.get('x-forwarded-host') ?? h.get('host');
-    if (host) {
-      const local = /^(localhost|127\.0\.0\.1)(:|$)/.test(host);
-      const proto = h.get('x-forwarded-proto') ?? (local ? 'http' : 'https');
-      origin = `${proto}://${host}`;
-    }
-  } catch {
-    // outside a request scope - fall back to the canonical site url
-  }
-  return `${origin.replace(/\/+$/, '')}/payment/callback`;
-}
 
 // --- Transport -------------------------------------------------------------
 
@@ -220,7 +153,7 @@ export async function requestPayment(
   const m = withMerchant('/v1/request');
   if ('ok' in m) return m;
 
-  if (!Number.isInteger(input.amountRial) || input.amountRial <= MIN_AMOUNT_RIAL) {
+  if (!isPayableAmount(input.amountRial)) {
     return { ok: false, result: 105, message: resultMessage(105) };
   }
 

@@ -3,12 +3,16 @@ import { getCatalog } from '@/lib/catalog';
 import { deleteProductAction } from '@/app/admin/actions';
 import { ProductForm } from './ProductForm';
 import { DeleteButton } from './DeleteButton';
+import { requireAdminPage } from '@/lib/admin';
 
 export default async function AdminProductEditPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Layouts do not gate the pages beneath them — see requireAdminPage.
+  await requireAdminPage();
+
   const { id } = await params;
   const catalog = await getCatalog();
   const product = catalog.products.find((p) => p.id === Number(id));

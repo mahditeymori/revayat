@@ -1,8 +1,10 @@
 import Image from 'next/image';
-import { listOrders, type OrderStatus } from '@/lib/catalog';
+import Link from 'next/link';
+import { listOrders, orderPaymentState, type OrderStatus, type PaymentState } from '@/lib/catalog';
 import { formatToman, formatJalali, toPersianDigits } from '@/lib/format';
 import { updateOrderStatusAction } from '../actions';
 import { DeleteOrderForm } from './DeleteOrderForm';
+import { requireAdminPage } from '@/lib/admin';
 
 const STATUS_FA: Record<OrderStatus, string> = {
   new: 'جدید',
@@ -12,7 +14,26 @@ const STATUS_FA: Record<OrderStatus, string> = {
   canceled: 'لغو شده',
 };
 
+// Fulfilment status and payment state are separate axes: an order can be paid
+// but not yet shipped, or shipped after an offline payment. Both are shown.
+const PAYMENT_FA: Record<PaymentState, string> = {
+  paid: 'پرداخت شده',
+  awaiting: 'در انتظار پرداخت',
+  failed: 'پرداخت ناموفق',
+  unpaid: 'پرداخت نشده',
+};
+
+const PAYMENT_CLASS: Record<PaymentState, string> = {
+  paid: 'border-ink bg-ink text-cream',
+  awaiting: 'border-sand text-sand-dark',
+  failed: 'border-clay text-clay',
+  unpaid: 'border-cream-200 text-ink-60',
+};
+
 export default async function AdminOrdersPage() {
+  // Layouts do not gate the pages beneath them — see requireAdminPage.
+  await requireAdminPage();
+
   const orders = (await listOrders()).slice().reverse();
 
   return (
@@ -26,9 +47,23 @@ export default async function AdminOrdersPage() {
             <li key={o.id} className="border border-cream-200 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium">
-                    سفارش {toPersianDigits(o.id)} — {formatToman(o.totalRial)}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-sm font-medium">
+                      سفارش {toPersianDigits(o.id)} — {formatToman(o.totalRial)}
+                    </p>
+                    <span className={`border px-3 py-1 text-xs ${PAYMENT_CLASS[orderPaymentState(o)]}`}>
+                      {PAYMENT_FA[orderPaymentState(o)]}
+                    </span>
+                    {o.paidTrackId && (
+                      <Link
+                        href={`/admin/payments?q=${o.paidTrackId}`}
+                        className="text-xs text-ink-60 underline hover:text-ink"
+                        dir="ltr"
+                      >
+                        {toPersianDigits(o.paidTrackId)}
+                      </Link>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs text-ink-60">{formatJalali(o.createdAt)}</p>
                   <p className="mt-3 text-sm">
                     {o.customer.name} — <span dir="ltr">{toPersianDigits(o.customer.phone)}</span>

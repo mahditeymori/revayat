@@ -120,7 +120,9 @@ Everything mutable lives in the `revayat_data` Docker volume:
 ```
 /app/data/products.json     catalog (admin-editable)
 /app/data/settings.json     hero text, announcement, footer
-/app/data/orders.json       orders
+/app/data/orders.json       orders (incl. payment state per order)
+/app/data/payments.json     payment attempts — trackId, amount, bank refs
+/app/data/counters.json     monotonic order-id counter (never goes down)
 /app/data/uploads/          uploaded product images
 ```
 
@@ -164,6 +166,7 @@ A backup on the same disk survives a bad deploy but not a dead VM. Copy
 | Secret | Lives in | Never in |
 |---|---|---|
 | `ADMIN_PASSWORD` | server `.env`, laptop `.env` | Git — `.gitignore` blocks `.env` |
+| `ZIBAL_MERCHANT` | server `.env`, laptop `.env.local` | Git, **and the browser** — never rename it `NEXT_PUBLIC_*` |
 | `SSH_KEY`, `SSH_HOST` | GitHub Actions secrets | the repo |
 | GHCR token | `docker login` on the server | the repo |
 
@@ -183,6 +186,73 @@ docker compose up -d --force-recreate web
 
 Do the same in your laptop `.env`. Existing admin sessions are signed with the
 password, so they are invalidated by the change — log in again.
+
+## Payments (Zibal)
+
+Checkout redirects to Zibal, and the order is only completed after the payment
+is verified **server-side**. The flow:
+
+1. `/checkout` → `POST /v1/request` → a `trackId`, and a `pending` row in
+   `payments.json` written *before* the customer leaves.
+2. Browser goes to `https://gateway.zibal.ir/start/<trackId>`.
+3. The bank returns the customer to `/payment/callback`.
+4. That route calls `POST /v1/verify` and only then marks the order paid.
+
+The callback's `success=1` is **never trusted** — it is a plain GET on a public
+URL that anyone can type. `/v1/verify` is the only thing that completes an
+order, and the amount it reports is checked against the stored order total
+before anything is marked paid.
+
+### Configuring the merchant
+
+`ZIBAL_MERCHANT` must be set on the server, in `.env`. `deploy.sh` refuses to
+deploy without it, because a site that silently cannot take payments is worse
+than a failed deploy.
+
+```bash
+$EDITOR /srv/revayat/.env          # set ZIBAL_MERCHANT=<merchant id>
+./deploy.sh                        # redeploy the current pin
+```
+
+Set it to the literal `zibal` to run against Zibal's sandbox: the whole flow
+works end to end and no real money moves. Useful on staging.
+
+If the variable is missing the storefront still runs, but checkout shows a
+"gateway not configured" error rather than accepting orders it cannot charge —
+and `/admin/payments` shows a red banner saying so.
+
+### HTTPS
+
+`callbackUrl` is built from `X-Forwarded-Proto` and `X-Forwarded-Host`, both set
+by nginx (see `nginx.conf`). If those headers are ever dropped, the callback URL
+falls back to `NEXT_PUBLIC_SITE_URL`. Zibal rejects a non-absolute callback with
+result 106.
+
+The CSP in `next.config.mjs` lists `https://gateway.zibal.ir` in `form-action`.
+Without it the browser blocks the redirect to the bank and the customer never
+reaches the payment page. It is a navigation target only — no Zibal script,
+style, frame or XHR is permitted.
+
+### When a payment gets stuck
+
+A customer who closes the tab on the bank page leaves a `pending` row and no
+callback. Open **مدیریت → پرداخت‌ها**, filter by "در انتظار", and press
+**استعلام از درگاه**: that calls `POST /v1/inquiry` and, if the money really
+moved, runs a real verify and completes the order.
+
+Note that `/v1/inquiry` returns `result: 100` for any *successful lookup*,
+whatever the payment did — the payment's actual state is in `status`. The two
+responses are interpreted by different functions (`decideInquiry` vs
+`decideVerification` in `src/lib/zibal-codes.ts`) for exactly this reason.
+
+### Testing the integration
+
+```bash
+cd apps/web && npm test          # 74 tests, no network
+```
+
+Covers success, failure, cancellation, duplicate and concurrent callbacks,
+already-verified transactions, amount tampering, forged callbacks, and inquiry.
 
 ## Analytics cookies
 
@@ -243,6 +313,15 @@ covered too when `DATA_DIR` is set.
 
 ```bash
 cd apps/web && npm install && npm run dev      # hot reload, port 3000
+```
+
+Local secrets go in `apps/web/.env.local` (git-ignored, and **not** tracked —
+if `git ls-files` ever lists it again, `git rm --cached` it, because
+`.gitignore` does not apply to files already tracked):
+
+```
+ADMIN_PASSWORD=<anything>
+ZIBAL_MERCHANT=zibal          # sandbox: full flow, no real money
 ```
 
 To exercise the production stack locally, `docker compose up --build` —

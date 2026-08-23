@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { buildDashboard } from '@/lib/reports';
 import { formatToman, toPersianDigits } from '@/lib/format';
 import { DayColumns, RankedList, Stat } from '@/components/charts';
+import { requireAdminPage } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,9 @@ export default async function AnalyticsPage({
 }: {
   searchParams: Promise<{ days?: string }>;
 }) {
+  // Layouts do not gate the pages beneath them — see requireAdminPage.
+  await requireAdminPage();
+
   const { days: raw } = await searchParams;
   const days = RANGES.find((r) => String(r) === raw) ?? 30;
   const { traffic, products, sales, consent } = await buildDashboard(days);

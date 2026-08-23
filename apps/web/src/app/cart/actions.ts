@@ -2,11 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { addToCart, updateCartItem, getCart, clearCart } from '@/lib/cart';
+import { addToCart, updateCartItem, getCart } from '@/lib/cart';
 import { getCatalog, createOrder, effectivePrice, type OrderItem } from '@/lib/catalog';
 import { startPayment } from '@/lib/payment-flow';
-import { cookies } from 'next/headers';
-import { record, CONSENT_COOKIE } from '@/lib/analytics';
+import { callbackUrl } from '@/lib/zibal-callback-url';
 import { normalizeDigits } from '@/lib/format';
 
 export type CartActionState = { error: string | null; ok?: boolean };
@@ -90,7 +89,7 @@ export async function submitCheckoutAction(formData: FormData): Promise<void> {
   // as a purchase: nothing about this order is final until the money arrives.
   // If the gateway is down the order still exists, so the customer can retry
   // from the failure page instead of re-entering the whole form.
-  const payment = await startPayment(order);
+  const payment = await startPayment(order, await callbackUrl());
   if (!payment.ok) {
     redirect(`/payment/failed?order=${order.id}&reason=${encodeURIComponent(payment.message)}`);
   }

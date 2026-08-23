@@ -1,7 +1,11 @@
 import { getSupportContent } from '@/lib/catalog';
 import { SupportContentForm } from './SupportContentForm';
+import { requireAdminPage } from '@/lib/admin';
 
 export default async function AdminSupportPage() {
+  // Layouts do not gate the pages beneath them — see requireAdminPage.
+  await requireAdminPage();
+
   const content = await getSupportContent();
 
   return (

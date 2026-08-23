@@ -183,15 +183,39 @@ export async function getOrder(id: number): Promise<Order | null> {
   return orders.find((o) => o.id === id) ?? null;
 }
 
-export function createOrder(customer: Order['customer'], items: OrderItem[]): Promise<Order> {
+/**
+ * Order ids are handed out from a counter that only ever goes up, kept in its
+ * own file so that deleting orders cannot lower it. Deriving the next id from
+ * max(existing ids) would reissue the id of a deleted trailing order, and a
+ * stale Zibal callback naming that orderId would then land on a different
+ * customer's order. The counter is seeded from the highest id ever seen.
+ */
+const COUNTERS = 'counters.json';
+
+function nextOrderId(orders: Order[]): Promise<number> {
+  const floor = Math.max(1000, ...orders.map((o) => o.id));
+  return mutate<{ orderId?: number }, number>(
+    COUNTERS,
+    {},
+    (c) => {
+      const id = Math.max(c.orderId ?? 0, floor) + 1;
+      return [{ ...c, orderId: id }, id];
+    },
+    'catalog',
+  );
+}
+
+export async function createOrder(
+  customer: Order['customer'],
+  items: OrderItem[],
+): Promise<Order> {
+  const id = await nextOrderId(await listOrders());
   return mutate<Order[], Order>(
     ORDERS,
     [],
     (orders) => {
       const order: Order = {
-        // max, not last: a deleted trailing order must not free its id for
-        // reuse, or a stale Zibal callback could be applied to a new order.
-        id: Math.max(1000, ...orders.map((o) => o.id)) + 1,
+        id,
         createdAt: new Date().toISOString(),
         status: 'new',
         customer,

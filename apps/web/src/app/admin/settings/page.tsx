@@ -1,7 +1,11 @@
 import { getSettings } from '@/lib/catalog';
 import { SettingsForm } from './SettingsForm';
+import { requireAdminPage } from '@/lib/admin';
 
 export default async function AdminSettingsPage() {
+  // Layouts do not gate the pages beneath them — see requireAdminPage.
+  await requireAdminPage();
+
   const settings = await getSettings();
 
   return (

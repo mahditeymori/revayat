@@ -20,6 +20,8 @@ import {
 } from '@/lib/catalog';
 import type { FaqEntry } from '@/lib/faq';
 import { saveUpload, deleteUploadDir } from '@/lib/uploads';
+import { reconcilePayment } from '@/lib/payment-flow';
+import { isTrackId } from '@/lib/zibal-codes';
 import { normalizeDigits, slugifyPersian } from '@/lib/format';
 
 export type LoginState = { error: string | null };
@@ -160,6 +162,22 @@ export async function deleteOrderAction(formData: FormData): Promise<void> {
     await deleteOrder(id);
     revalidatePath('/admin/orders');
   }
+}
+
+/**
+ * Ask Zibal for the current state of a transaction and re-apply it locally.
+ * Used to resolve payments stuck in "pending" because the customer closed the
+ * tab on the bank page and the callback never fired.
+ */
+export async function inquirePaymentAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const trackId = String(formData.get('trackId') ?? '').trim();
+  if (!isTrackId(trackId)) redirect('/admin/payments');
+
+  const result = await reconcilePayment(trackId);
+  revalidatePath('/admin/payments');
+  revalidatePath('/admin/orders');
+  redirect(`/admin/payments?q=${trackId}&notice=${encodeURIComponent(result.message)}`);
 }
 
 export async function saveSettingsAction(

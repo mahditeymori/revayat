@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 const NAV = [
   { href: '/admin', label: 'محصولات' },
   { href: '/admin/orders', label: 'سفارش‌ها' },
+  { href: '/admin/payments', label: 'پرداخت‌ها' },
   { href: '/admin/analytics', label: 'آمار' },
   { href: '/admin/settings', label: 'تنظیمات سایت' },
   { href: '/admin/support', label: 'پشتیبانی' },

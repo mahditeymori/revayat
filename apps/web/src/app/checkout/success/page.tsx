@@ -1,8 +1,11 @@
-import type { Metadata } from 'next';
-import Link from 'next/link';
-import { toPersianDigits } from '@/lib/format';
+// Kept as a redirect only. Before the Zibal gateway this was the end of the
+// checkout flow ("we will call you about payment"); the receipt now lives at
+// /payment/result, driven by the verified payment row rather than by an order
+// id in the URL. Old links and bookmarks land here and are forwarded.
+import { redirect } from 'next/navigation';
+import { getOrder } from '@/lib/catalog';
+import { normalizeDigits } from '@/lib/format';
 
-export const metadata: Metadata = { title: 'سفارش ثبت شد', robots: { index: false } };
 export const dynamic = 'force-dynamic';
 
 export default async function CheckoutSuccessPage({
@@ -10,23 +13,12 @@ export default async function CheckoutSuccessPage({
 }: {
   searchParams: Promise<{ order?: string }>;
 }) {
-  const { order } = await searchParams;
+  const { order: param } = await searchParams;
+  const id = Number(normalizeDigits(param ?? ''));
+  const order = Number.isInteger(id) && id > 0 ? await getOrder(id) : null;
 
-  return (
-    <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-32 text-center">
-      <p className="wordmark text-xs text-ink-60">سپاس از شما</p>
-      <h1 className="mt-6 text-2xl font-medium">سفارش شما ثبت شد</h1>
-      {order && (
-        <p className="mt-4 text-sm text-ink-60">
-          شماره سفارش: <span className="font-medium text-ink">{toPersianDigits(order)}</span>
-        </p>
-      )}
-      <p className="mt-4 max-w-sm text-sm leading-7 text-ink-60">
-        برای هماهنگی پرداخت و ارسال، به‌زودی با شماره‌ای که ثبت کرده‌اید تماس می‌گیریم.
-      </p>
-      <Link href="/collections" className="mt-10 border border-ink px-8 py-3 text-sm hover:bg-ink hover:text-cream">
-        ادامه خرید
-      </Link>
-    </div>
-  );
+  if (order?.paidTrackId) {
+    redirect(`/payment/result?trackId=${encodeURIComponent(order.paidTrackId)}`);
+  }
+  redirect(order ? `/payment/failed?order=${order.id}` : '/cart');
 }

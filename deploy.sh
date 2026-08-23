@@ -16,6 +16,13 @@ PREV=.deploy-image.prev  # last image known to have served traffic
 
 [ -f .env ] || { echo "error: .env missing on this host — copy .env.example and fill it in"; exit 1; }
 
+# A deploy without the gateway credential brings up a site that cannot take
+# money. Catching it here beats finding out from a customer at checkout.
+grep -qE '^ZIBAL_MERCHANT=.+' .env || {
+  echo "error: ZIBAL_MERCHANT is missing or empty in .env — checkout would be unable to take payments"
+  exit 1
+}
+
 NEW_IMAGE="${1:-}"
 if [ -z "$NEW_IMAGE" ]; then
   [ -f "$PIN" ] || { echo "error: no image given and no $PIN to fall back on"; exit 1; }

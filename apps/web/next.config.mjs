@@ -1,8 +1,15 @@
 /** @type {import('next').NextConfig} */
 
 // Persian-heritage brand storefront, fully self-contained: local JSON catalog,
-// local images, self-hosted fonts. CSP is intentionally strict — no third-party
-// origins at all.
+// local images, self-hosted fonts. CSP is intentionally strict — the payment
+// gateway is the only third-party origin, and only as a navigation target.
+//
+// The checkout form POSTs to a server action that redirects to Zibal. Browsers
+// enforce form-action against the *final* URL of a form submission, so without
+// the gateway listed here that redirect is blocked and the customer never
+// reaches the bank. It is a navigation target only: no Zibal script, style,
+// image, frame or XHR is allowed by any other directive.
+const ZIBAL_GATEWAY = 'https://gateway.zibal.ir';
 const csp = [
   "default-src 'self'",
   "img-src 'self' data: blob:",
@@ -11,7 +18,7 @@ const csp = [
   "font-src 'self' data:",
   "connect-src 'self'",
   "frame-ancestors 'none'",
-  "form-action 'self'",
+  `form-action 'self' ${ZIBAL_GATEWAY}`,
   "base-uri 'self'",
   "object-src 'none'",
 ].join('; ');

@@ -28,7 +28,7 @@ export default async function CheckoutPage({
     <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
       <h1 className="text-2xl font-medium">ثبت سفارش</h1>
       <p className="mt-3 text-sm text-ink-60">
-        سفارش شما ثبت می‌شود و برای هماهنگی پرداخت و ارسال با شما تماس می‌گیریم.
+        پس از ثبت اطلاعات، به درگاه بانکی امن زیبال منتقل می‌شوید و پرداخت را همان‌جا انجام می‌دهید.
       </p>
 
       {error && ERRORS[error] && (
@@ -60,7 +60,7 @@ export default async function CheckoutPage({
             type="submit"
             className="bg-ink py-4 text-sm text-cream transition-colors hover:bg-sand-dark sm:col-span-2"
           >
-            ثبت نهایی سفارش
+            پرداخت و ثبت نهایی سفارش
           </button>
         </form>
 
@@ -80,6 +80,9 @@ export default async function CheckoutPage({
             <span>جمع کل</span>
             <span>{formatToman(cart.totalRial)}</span>
           </div>
+          <p className="mt-3 text-xs leading-6 text-ink-60">
+            همین مبلغ در درگاه بانکی از شما دریافت می‌شود.
+          </p>
           <Link href="/cart" className="mt-4 block text-center text-xs text-ink-60 underline hover:text-ink">
             بازگشت به سبد خرید
           </Link>

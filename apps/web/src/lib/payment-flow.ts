@@ -22,10 +22,13 @@ import {
   type Payment,
 } from './payments.ts';
 import {
-  callbackUrl,
+  cleanField,
+  decideInquiry,
+  decideVerification,
+  parseGatewayDate,
+  type InquiryDecision,
+  type VerifyDecision,
   inquirePayment,
-  isCanceledStatus,
-  isPaidStatus,
   requestPayment,
   resultMessage,
   startUrl,
@@ -43,8 +46,12 @@ export type StartResult =
  * Step 1+2 - create a Zibal session for an existing order and return where to
  * send the browser. The payment row is written before the redirect so an
  * abandoned payment is still visible in the admin panel.
+ *
+ * `callbackUrl` is passed in rather than derived here: it needs the live request
+ * headers, and keeping that dependency at the call site leaves this module (and
+ * the settle/verify logic below it) importable and testable without a request.
  */
-export async function startPayment(order: Order): Promise<StartResult> {
+export async function startPayment(order: Order, callbackUrl: string): Promise<StartResult> {
   if (await orderIsPaid(order.id)) {
     return { ok: false, message: 'این سفارش پیش‌تر پرداخت شده است.' };
   }
@@ -54,7 +61,7 @@ export async function startPayment(order: Order): Promise<StartResult> {
     orderId: String(order.id),
     description: `${site.nameFa} — سفارش ${order.id}`,
     mobile: order.customer.phone,
-    callbackUrl: await callbackUrl(),
+    callbackUrl,
   });
 
   if (!call.ok) {
@@ -120,49 +127,45 @@ export async function settlePayment(trackId: string): Promise<SettleResult> {
     };
   }
 
-  return applyVerification(payment, call.data);
+  return applyVerification(payment, call.data, decideVerification(call.data, payment.amountRial));
 }
 
 /**
  * Turn a /v1/verify (or /v1/inquiry) response into a settled payment + order.
  *
- * 100 = verified now, 201 = verified earlier. Both mean the money moved, so
- * both mark the order paid - 201 is the normal answer to a duplicate callback
- * that got past the claim (e.g. a row written before a restart).
+ * The decision is passed in, not derived here: /v1/verify and /v1/inquiry
+ * report success differently (see decideVerification vs decideInquiry), and
+ * only the caller knows which endpoint answered. Everything below is the
+ * bookkeeping the two share.
  */
 async function applyVerification(
   payment: Payment,
   data: ZibalVerifyResponse,
+  decision: VerifyDecision | InquiryDecision,
 ): Promise<SettleResult> {
   const { result, status } = data;
   const trackId = payment.trackId;
 
+  // Existing values are kept when a response omits a field (or fills it with
+  // the gateway's "-" placeholder), so a later inquiry cannot blank details a
+  // successful verify already captured.
   const details = {
-    transactionId: data.refNumber != null ? String(data.refNumber) : payment.transactionId,
-    cardNumber: data.cardNumber ?? payment.cardNumber,
-    paymentDate: normalizePaidAt(data.paidAt) ?? payment.paymentDate,
+    transactionId: cleanField(data.refNumber != null ? String(data.refNumber) : null) ?? payment.transactionId,
+    cardNumber: cleanField(data.cardNumber) ?? payment.cardNumber,
+    paymentDate: parseGatewayDate(data.paidAt) ?? payment.paymentDate,
     resultCode: result,
     statusCode: status ?? payment.statusCode,
   };
 
-  if (result === 100 || result === 201) {
-    // Amount check before completing the order. Zibal echoes back the amount it
-    // actually charged; if it does not match what this order costs, something is
-    // wrong (a replayed trackId, a tampered session) and the order must not be
-    // completed on the strength of it.
-    const charged = typeof data.amount === 'number' ? data.amount : null;
-    if (charged !== null && charged !== payment.amountRial) {
-      const message = `مبلغ پرداخت‌شده با مبلغ سفارش مطابقت ندارد (${charged} ≠ ${payment.amountRial} ریال).`;
-      console.error(`[payment] amount mismatch on trackId ${trackId}: ${message}`);
-      const updated = await updatePayment(trackId, {
-        ...details,
-        status: 'failed',
-        errorMessage: message,
-      });
-      await setOrderPaymentState(payment.orderId, 'failed');
-      return { outcome: 'failed', message, payment: updated, orderId: payment.orderId };
-    }
+  if (decision.kind === 'amount-mismatch') {
+    const message = `مبلغ پرداخت‌شده با مبلغ سفارش مطابقت ندارد (${decision.charged} ≠ ${decision.expected} ریال).`;
+    console.error(`[payment] amount mismatch on trackId ${trackId}: charged=${decision.charged} expected=${decision.expected}`);
+    const updated = await updatePayment(trackId, { ...details, status: 'failed', errorMessage: message });
+    await setOrderPaymentState(payment.orderId, 'failed');
+    return { outcome: 'failed', message, payment: updated, orderId: payment.orderId };
+  }
 
+  if (decision.kind === 'paid') {
     const updated = await updatePayment(trackId, {
       ...details,
       status: 'paid',
@@ -174,7 +177,9 @@ async function applyVerification(
       paidAt: details.paymentDate ?? new Date().toISOString(),
     });
     return {
-      outcome: result === 201 ? 'already-paid' : 'paid',
+      // An inquiry-sourced 'paid' carries no alreadyVerified flag; a payment
+      // reconciled that way was verified before this call either way.
+      outcome: 'alreadyVerified' in decision && decision.alreadyVerified ? 'already-paid' : 'paid',
       message: 'پرداخت با موفقیت انجام شد.',
       payment: updated,
       orderId: payment.orderId,
@@ -184,7 +189,7 @@ async function applyVerification(
   // Not paid. The claim stays set: re-verifying a failed trackId cannot turn it
   // into a success, and clearing it would let a repeated callback hammer the
   // gateway. A genuine retry creates a new trackId.
-  const canceled = isCanceledStatus(status);
+  const canceled = decision.kind === 'canceled';
   const message = canceled
     ? 'پرداخت توسط شما لغو شد.'
     : `${resultMessage(result)} ${statusMessage(status)}`.trim();
@@ -223,11 +228,42 @@ export async function reconcilePayment(trackId: string): Promise<SettleResult> {
     return { outcome: 'unknown', message: call.message, payment: existing, orderId: existing.orderId };
   }
 
-  if (call.data.result === 100 && isPaidStatus(call.data.status) && !existing.verified) {
+  const data = call.data;
+  const decision = decideInquiry(data, existing.amountRial);
+
+  // The lookup itself failed (bad trackId, merchant problem). Nothing is known
+  // about the payment, so nothing about it changes.
+  if (decision.kind === 'query-failed') {
+    const message = resultMessage(data.result);
+    await updatePayment(trackId, { errorMessage: message, resultCode: data.result });
+    return { outcome: 'unknown', message, payment: existing, orderId: existing.orderId };
+  }
+
+  // Still waiting for the customer at the bank. Deliberately NOT a failure:
+  // marking it failed would strip the retry option from a payment that may yet
+  // succeed, and the row is already 'pending'.
+  if (decision.kind === 'awaiting') {
+    const updated = await updatePayment(trackId, {
+      statusCode: data.status ?? existing.statusCode,
+      resultCode: data.result,
+    });
+    return {
+      outcome: 'unknown',
+      message: statusMessage(data.status) || 'این تراکنش هنوز پرداخت نشده است.',
+      payment: updated,
+      orderId: existing.orderId,
+    };
+  }
+
+  // The money moved. Inquiry is read-only and never settles funds, so an
+  // unverified payment still has to go through a real /v1/verify.
+  if (decision.kind === 'paid' && !existing.verified) {
     return settlePayment(trackId);
   }
 
-  return applyVerification(existing, call.data);
+  // Everything else (already verified, cancelled, declined, amount mismatch)
+  // is the same bookkeeping as a callback, so it shares that code path.
+  return applyVerification(existing, data, decision);
 }
 
 /** The settled state of a payment row, without touching the gateway. */
@@ -247,13 +283,3 @@ function describe(payment: Payment): Omit<SettleResult, 'payment' | 'orderId'> {
 /** Convenience for the result pages: the order behind a settled payment. */
 export const orderFor = (result: SettleResult): Promise<Order | null> =>
   result.orderId ? getOrder(result.orderId) : Promise.resolve(null);
-
-/**
- * Zibal returns paidAt as a local ISO-ish string. Store whatever parses so the
- * admin panel can format it - never crash on a surprise value.
- */
-function normalizePaidAt(paidAt: string | null | undefined): string | null {
-  if (!paidAt) return null;
-  const d = new Date(paidAt);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}

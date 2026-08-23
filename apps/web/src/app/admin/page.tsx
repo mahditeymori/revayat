@@ -2,8 +2,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getCatalog } from '@/lib/catalog';
 import { formatToman } from '@/lib/format';
+import { requireAdminPage } from '@/lib/admin';
 
 export default async function AdminProductsPage() {
+  // Layouts do not gate the pages beneath them — see requireAdminPage.
+  await requireAdminPage();
+
   const { products } = await getCatalog();
 
   return (
