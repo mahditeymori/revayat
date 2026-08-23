@@ -233,6 +233,25 @@ Without it the browser blocks the redirect to the bank and the customer never
 reaches the payment page. It is a navigation target only — no Zibal script,
 style, frame or XHR is permitted.
 
+### Diagnosing a dead checkout
+
+Two configuration faults produce a checkout that looks broken to customers.
+Both are now loud in `docker compose logs web`:
+
+| Symptom | Log line | Fix |
+|---|---|---|
+| "درگاه پرداخت پیکربندی نشده است" | `CONFIGURATION ERROR: ZIBAL_MERCHANT is not set` | Set `ZIBAL_MERCHANT` in the server `.env`, then `docker compose up -d --force-recreate web` |
+| "آدرس IP این سرور در پنل زیبال مجاز نشده است" (result 115) | `CONFIGURATION ERROR on /v1/request: result=115 "invalid IP <addr>"` | Add that IP to the merchant's allowlist in the Zibal panel |
+
+Zibal's `115` response names the rejected address, and the log line quotes it —
+that is the address to allowlist. Note it is the **server's** egress IP, not
+your laptop's: testing the production merchant from a workstation will return
+115 even when production is configured correctly.
+
+The container also prints a warning at boot when `ZIBAL_MERCHANT` is missing,
+and `deploy.sh` refuses to deploy without it, so this should not reach
+production again.
+
 ### When a payment gets stuck
 
 A customer who closes the tab on the bank page leaves a `pending` row and no

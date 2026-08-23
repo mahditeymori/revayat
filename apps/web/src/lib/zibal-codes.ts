@@ -15,6 +15,12 @@ export const RESULT_MESSAGES: Record<number, string> = {
   105: 'مبلغ باید بیشتر از ۱٬۰۰۰ ریال باشد.',
   106: 'آدرس بازگشت نامعتبر است.',
   113: 'مبلغ تراکنش از سقف مجاز بیشتر است.',
+  // 114/115 are configuration errors on the merchant account, observed live:
+  // Zibal answers 115 ("invalid IP <addr>") when the calling server's address is
+  // not on the merchant's allowlist in the Zibal panel. It looks like a payment
+  // failure to the customer, so it must not read as a generic unknown error.
+  114: 'شناسه سفارش تکراری است.',
+  115: 'آدرس IP این سرور در پنل زیبال مجاز نشده است.',
   201: 'این تراکنش پیش‌تر تأیید شده است.',
   202: 'پرداخت انجام نشده یا ناموفق بوده است.',
   203: 'شناسه پیگیری نامعتبر است.',
@@ -22,6 +28,18 @@ export const RESULT_MESSAGES: Record<number, string> = {
 
 export const resultMessage = (code: number): string =>
   RESULT_MESSAGES[code] ?? `خطای نامشخص درگاه (کد ${code}).`;
+
+/**
+ * Result codes that mean "this site is misconfigured", not "this payment
+ * failed". They affect every customer identically until an operator changes
+ * something in the Zibal panel or the environment, so they are logged as
+ * configuration faults and surfaced in the admin panel rather than being shown
+ * to the customer as an ordinary payment error.
+ */
+const CONFIG_RESULTS = new Set([102, 103, 104, 106, 115]);
+
+export const isConfigResult = (code: number | null | undefined): boolean =>
+  code != null && CONFIG_RESULTS.has(code);
 
 // --- Transaction status codes (the `status` field) -------------------------
 

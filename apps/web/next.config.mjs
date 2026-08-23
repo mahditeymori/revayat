@@ -10,9 +10,16 @@
 // reaches the bank. It is a navigation target only: no Zibal script, style,
 // image, frame or XHR is allowed by any other directive.
 const ZIBAL_GATEWAY = 'https://gateway.zibal.ir';
+
+// The Enamad trust seal (Iranian e-commerce) must be served unmodified from
+// Enamad's own host — proxying or re-encoding it invalidates the seal. Without
+// it in img-src the badge is silently blocked and the shop shows no trust mark
+// at all, which for an Iranian storefront costs real conversions. Image origin
+// only; no script or frame from that host is permitted.
+const ENAMAD = 'https://trustseal.enamad.ir';
 const csp = [
   "default-src 'self'",
-  "img-src 'self' data: blob:",
+  `img-src 'self' data: blob: ${ENAMAD}`,
   "script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''),
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",

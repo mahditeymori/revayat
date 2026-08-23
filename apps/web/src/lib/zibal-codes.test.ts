@@ -16,6 +16,7 @@ import {
   resultMessage,
   statusMessage,
   cleanField,
+  isConfigResult,
   parseGatewayDate,
 } from './zibal-codes.ts';
 
@@ -161,4 +162,36 @@ test('an inquiry separates cancellation, failure and a failed lookup', () => {
   assert.deepEqual(decideInquiry({ result: 100, status: 5 }, AMOUNT), { kind: 'failed' });
   // 203 = trackId not found: nothing is known about the payment either way.
   assert.deepEqual(decideInquiry({ result: 203 }, AMOUNT), { kind: 'query-failed' });
+});
+
+// --- Configuration errors --------------------------------------------------
+// The production outage: checkout said "gateway not configured" and nothing in
+// the code distinguished an operator problem from a customer's failed payment.
+
+test('result 115 is a real message, not an unknown-code fallback', () => {
+  // Observed live: Zibal answers 115 "invalid IP <addr>" when the calling
+  // server is not on the merchant's allowlist. It reached the customer as
+  // "خطای نامشخص درگاه (کد 115)", which tells an operator nothing.
+  assert.equal(resultMessage(115), 'آدرس IP این سرور در پنل زیبال مجاز نشده است.');
+  assert.doesNotMatch(resultMessage(115), /نامشخص/);
+  assert.equal(resultMessage(114), 'شناسه سفارش تکراری است.');
+});
+
+test('configuration faults are distinguished from payment failures', () => {
+  // Ours to fix — every customer is blocked until an operator acts.
+  for (const c of [102, 103, 104, 106, 115]) {
+    assert.ok(isConfigResult(c), `${c} should be a configuration fault`);
+  }
+  // The customer's payment genuinely failed; the site is fine.
+  for (const c of [202, 203, 201, 100, 105, 113]) {
+    assert.ok(!isConfigResult(c), `${c} should not be a configuration fault`);
+  }
+  assert.ok(!isConfigResult(null));
+  assert.ok(!isConfigResult(undefined));
+});
+
+test('a configuration fault still fails the payment', () => {
+  // Being "our fault" must never mean the order gets completed anyway.
+  assert.equal(decideVerification({ result: 115, status: 1, amount: AMOUNT }, AMOUNT).kind, 'failed');
+  assert.equal(decideInquiry({ result: 115 }, AMOUNT).kind, 'query-failed');
 });

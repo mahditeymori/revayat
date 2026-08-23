@@ -10,6 +10,7 @@
 import 'server-only';
 import {
   SANDBOX_MERCHANT,
+  isConfigResult,
   isPayableAmount,
   resultMessage,
 } from './zibal-codes.ts';
@@ -135,8 +136,12 @@ async function post<T extends { result: number; message?: string }>(
 function withMerchant(path: string): { merchant: string } | ZibalCall<never> {
   try {
     return { merchant: merchantId() };
-  } catch (err) {
-    logError(path, 'ZIBAL_MERCHANT missing', err);
+  } catch {
+    console.error(
+      `[zibal] CONFIGURATION ERROR: ZIBAL_MERCHANT is not set, so ${path} was never called. ` +
+        'No customer can pay until it is set in the server .env and the container is recreated ' +
+        '(see DEPLOY.md "Configuring the merchant").',
+    );
     return { ok: false, result: null, message: 'درگاه پرداخت پیکربندی نشده است.' };
   }
 }
@@ -173,8 +178,18 @@ export async function requestPayment(
 
   if (!call.ok) return call;
   if (call.data.result !== 100 || !call.data.trackId) {
-    logError('/v1/request', `result=${call.data.result} ${call.data.message ?? ''}`);
-    return { ok: false, result: call.data.result, message: resultMessage(call.data.result) };
+    const { result, message } = call.data;
+    if (isConfigResult(result)) {
+      // Affects every customer until an operator fixes it, so it is logged as a
+      // configuration fault rather than as one customer's failed payment.
+      console.error(
+        `[zibal] CONFIGURATION ERROR on /v1/request: result=${result} "${message ?? ''}" — ` +
+          `${resultMessage(result)} This blocks ALL payments until it is fixed in the Zibal panel or the server environment.`,
+      );
+    } else {
+      logError('/v1/request', `result=${result} ${message ?? ''}`);
+    }
+    return { ok: false, result, message: resultMessage(result) };
   }
   return call;
 }

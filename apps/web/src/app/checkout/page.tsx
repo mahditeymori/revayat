@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { getCart } from '@/lib/cart';
 import { formatToman } from '@/lib/format';
 import { submitCheckoutAction } from '@/app/cart/actions';
+import { isConfigured } from '@/lib/zibal';
 
 export const metadata: Metadata = { title: 'ثبت سفارش', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -24,12 +25,22 @@ export default async function CheckoutPage({
   const [{ error }, cart] = await Promise.all([searchParams, getCart()]);
   if (cart.items.length === 0) redirect('/cart');
 
+  // Server-side only — isConfigured reads a non-public env var and this is a
+  // server component, so the merchant id never reaches the browser.
+  const gatewayReady = isConfigured();
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
       <h1 className="text-2xl font-medium">ثبت سفارش</h1>
       <p className="mt-3 text-sm text-ink-60">
         پس از ثبت اطلاعات، به درگاه بانکی امن زیبال منتقل می‌شوید و پرداخت را همان‌جا انجام می‌دهید.
       </p>
+
+      {!gatewayReady && (
+        <p role="alert" className="mt-6 border border-clay bg-clay/10 px-4 py-3 text-sm leading-7 text-clay">
+          پرداخت آنلاین در حال حاضر در دسترس نیست. لطفاً کمی بعد دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.
+        </p>
+      )}
 
       {error && ERRORS[error] && (
         <p role="alert" className="mt-6 border border-clay bg-clay/10 px-4 py-3 text-sm text-clay">
@@ -58,7 +69,8 @@ export default async function CheckoutPage({
           </div>
           <button
             type="submit"
-            className="bg-ink py-4 text-sm text-cream transition-colors hover:bg-sand-dark sm:col-span-2"
+            disabled={!gatewayReady}
+            className="bg-ink py-4 text-sm text-cream transition-colors hover:bg-sand-dark disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
           >
             پرداخت و ثبت نهایی سفارش
           </button>

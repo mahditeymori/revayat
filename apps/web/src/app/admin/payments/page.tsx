@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { listPayments, totals, type Payment, type PaymentStatus } from '@/lib/payments';
 import { listOrders } from '@/lib/catalog';
-import { statusMessage, isSandbox, isConfigured } from '@/lib/zibal';
+import { statusMessage, isSandbox, isConfigured, isConfigResult } from '@/lib/zibal';
 import { formatToman, formatJalali, toPersianDigits } from '@/lib/format';
 import { InquiryButton } from './InquiryButton';
 import { requireAdminPage } from '@/lib/admin';
@@ -52,6 +52,12 @@ export default async function AdminPaymentsPage({
 
   const customerOf = new Map(orders.map((o) => [o.id, o.customer.name]));
 
+  // Most recent configuration-class failure, if any — see isConfigResult.
+  const configFault = all
+    .slice()
+    .reverse()
+    .find((p) => isConfigResult(p.resultCode))?.errorMessage ?? null;
+
   let rows = all.slice().reverse();
   if (active !== 'all') rows = rows.filter((p) => p.status === active);
   if (needle) {
@@ -78,6 +84,13 @@ export default async function AdminPaymentsPage({
       {isSandbox() && (
         <p className="mt-4 border border-sand bg-sand/10 px-4 py-3 text-xs leading-6 text-sand-dark">
           حالت آزمایشی فعال است (merchant = zibal). هیچ پول واقعی جابه‌جا نمی‌شود.
+        </p>
+      )}
+      {configFault && (
+        <p role="alert" className="mt-4 border border-clay bg-clay/10 px-4 py-3 text-xs leading-6 text-clay">
+          خطای پیکربندی درگاه: {configFault}
+          {' '}این خطا همه‌ی پرداخت‌ها را متوقف می‌کند تا زمانی که در پنل زیبال یا تنظیمات سرور برطرف شود.
+          {' '}اگر کد ۱۱۵ است، IP سرور را در پنل زیبال مجاز کنید.
         </p>
       )}
       {notice && (
