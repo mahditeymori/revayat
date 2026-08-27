@@ -16,6 +16,7 @@ import { settlePayment, type SettleResult } from '@/lib/payment-flow';
 import { isTrackId } from '@/lib/zibal-codes';
 import { record, CONSENT_COOKIE } from '@/lib/analytics';
 import { getOrder } from '@/lib/catalog';
+import { site } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,7 +79,23 @@ async function onPaid(result: SettleResult): Promise<void> {
   }).catch(() => {}); // analytics must never block a completed order
 }
 
-/** 303 so the browser switches to GET and a refresh cannot replay the callback. */
+/**
+ * 303 so the browser switches to GET and a refresh cannot replay the callback.
+ *
+ * Built from the public origin, not `req.url` - behind the reverse proxy the
+ * app is bound to 0.0.0.0:3000, so `req.url` resolves to
+ * `http://0.0.0.0:3000/...` and a redirect built from it sends the browser to
+ * an address it cannot reach. This is the same reasoning as callbackUrl() in
+ * zibal-callback-url.ts, mirrored here because a route handler already has
+ * the headers on `req` and doesn't need next/headers.
+ */
 function redirectTo(req: Request, path: string): NextResponse {
-  return NextResponse.redirect(new URL(path, req.url), 303);
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
+  let origin = site.url;
+  if (host) {
+    const local = /^(localhost|127\.0\.0\.1)(:|$)/.test(host);
+    const proto = req.headers.get('x-forwarded-proto') ?? (local ? 'http' : 'https');
+    origin = `${proto}://${host}`;
+  }
+  return NextResponse.redirect(new URL(path, origin), 303);
 }
