@@ -56,7 +56,12 @@ const nextConfig = {
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
       },
       {
-        source: '/products/:path*',
+        // Product IMAGE files only — not the product page itself. `/products/:path*`
+        // also matches `/products/<slug>` (the page route), and caching that for a
+        // day+week meant a product page that ever rendered "not found" (e.g. the
+        // very first request for a brand-new admin-created slug) stayed stuck
+        // serving that cached 404-as-200 response long after the product existed.
+        source: '/products/:slug/:file(.+\\.(?:png|jpg|jpeg|webp|avif))',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }],
       },
     ];
