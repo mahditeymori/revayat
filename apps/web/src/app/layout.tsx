@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import { site, nav } from '@/lib/site';
 import { getSettings, getSupportContent, safe } from '@/lib/catalog';
 import { DEFAULT_SUPPORT_CONTENT } from '@/lib/faq';
 import { CartBadge } from '@/components/CartBadge';
+import { CartIcon } from '@/components/CartIcon';
 import { Track } from '@/components/Track';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { SupportWidget } from '@/components/SupportWidget';
@@ -121,7 +121,7 @@ function Header() {
             جستجو
           </Link>
           <Link href="/cart" className="relative flex items-center hover:opacity-75" aria-label="سبد خرید">
-            <Image src="/cart-icon.png" alt="" width={24} height={24} className="h-6 w-6" />
+            <CartIcon />
             <CartBadge />
           </Link>
         </div>

@@ -20,7 +20,10 @@ const ENAMAD = 'https://trustseal.enamad.ir';
 const csp = [
   "default-src 'self'",
   `img-src 'self' data: blob: ${ENAMAD}`,
-  "script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''),
+  // 'wasm-unsafe-eval' (not 'unsafe-eval') is only for the header cart icon's
+  // dotLottie renderer, which compiles a WebAssembly module to draw the
+  // animation — it does not permit eval()/new Function().
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'" + (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''),
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "connect-src 'self'",

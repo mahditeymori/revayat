@@ -11,3 +11,8 @@ node_modules/
 # Per-host deploy state — which image tag this server is running.
 .deploy-image
 .deploy-image.prev
+
+# Runtime data (Docker volume in production, local dev output here).
+apps/web/data/analytics/
+apps/web/data/orders.json
+apps/web/data/uploads/
