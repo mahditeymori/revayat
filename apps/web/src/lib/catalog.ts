@@ -126,7 +126,15 @@ export async function getProducts(q: ProductQuery = {}): Promise<Product[]> {
 
 export async function getProductBySlug(slug: string): Promise<Product | null> {
   const { products } = await getCatalog();
-  return products.find((p) => p.slug === slug) ?? null;
+  const found = products.find((p) => p.slug === slug) ?? null;
+  if (!found && slug.length < 30) {
+    console.error('[DEBUG getProductBySlug]', {
+      slugHex: Buffer.from(slug, 'utf8').toString('hex'),
+      productCount: products.length,
+      allSlugHex: products.map((p) => Buffer.from(p.slug, 'utf8').toString('hex')),
+    });
+  }
+  return found;
 }
 
 export async function getCategories(): Promise<(Category & { count: number; image?: string })[]> {
