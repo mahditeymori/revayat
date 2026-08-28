@@ -45,14 +45,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
-  if (!product) {
-    console.error('[DEBUG products/[slug]] miss', {
-      slug,
-      slugHex: Buffer.from(slug, 'utf8').toString('hex'),
-      slugLen: slug.length,
-    });
-    notFound();
-  }
+  if (!product) notFound();
 
   const [related, categories] = await Promise.all([
     safe(getRelated(product), []),

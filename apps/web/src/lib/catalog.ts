@@ -124,17 +124,26 @@ export async function getProducts(q: ProductQuery = {}): Promise<Product[]> {
   return list;
 }
 
+/**
+ * Next's dynamic route params are supposed to arrive already URL-decoded, but
+ * for percent-encoded UTF-8 segments (non-Latin slugs) this has been observed
+ * to sometimes reach the page still encoded (e.g. literal "%D8%AA%D8%B3%D8%AA"
+ * instead of "تست") depending on the request. Decoding here — a no-op for a
+ * slug that has no '%' — makes the lookup work either way instead of silently
+ * 404ing on non-Latin slugs.
+ */
+function decodeSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
+}
+
 export async function getProductBySlug(slug: string): Promise<Product | null> {
   const { products } = await getCatalog();
-  const found = products.find((p) => p.slug === slug) ?? null;
-  if (!found && slug.length < 30) {
-    console.error('[DEBUG getProductBySlug]', {
-      slugHex: Buffer.from(slug, 'utf8').toString('hex'),
-      productCount: products.length,
-      allSlugHex: products.map((p) => Buffer.from(p.slug, 'utf8').toString('hex')),
-    });
-  }
-  return found;
+  const target = decodeSlug(slug);
+  return products.find((p) => p.slug === target) ?? null;
 }
 
 export async function getCategories(): Promise<(Category & { count: number; image?: string })[]> {

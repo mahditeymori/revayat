@@ -20,7 +20,19 @@ const SORTS = [
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ sort?: string }> };
 
-async function resolveCollection(slug: string) {
+// Next's dynamic route params can arrive still percent-encoded for non-Latin
+// segments (see the same fix in lib/catalog.ts's getProductBySlug); decoding
+// here is a no-op for a slug with no '%'.
+function decodeSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
+}
+
+async function resolveCollection(rawSlug: string) {
+  const slug = decodeSlug(rawSlug);
   if (VIRTUAL[slug]) return VIRTUAL[slug];
   const categories = await safe(getCategories(), []);
   const cat = categories.find((c) => c.slug === slug);
