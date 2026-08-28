@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  getProducts,
   getProductBySlug,
   getCategories,
   getRelated,
@@ -17,14 +16,15 @@ import { ProductGallery } from '@/components/ProductGallery';
 import { EnamadBadge } from '@/components/EnamadBadge';
 import { AddToCartForm } from './AddToCartForm';
 
-export const revalidate = 300;
+// Always rendered fresh: this route's ISR caching (revalidate=300, generateStaticParams)
+// was observed to permanently stick a product page on a "not found" render if that exact
+// slug was ever requested even once before the product existed — Next's cache for a
+// notFound() output does not reliably self-correct on the next request the way a normal
+// page does, so a real, existing product stayed stuck showing not-found indefinitely.
+// The catalog is a small local JSON file, so a fresh read per request costs nothing.
+export const dynamic = 'force-dynamic';
 
 type Props = { params: Promise<{ slug: string }> };
-
-export async function generateStaticParams() {
-  const products = await safe(getProducts(), []);
-  return products.map((p) => ({ slug: p.slug }));
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
