@@ -73,9 +73,27 @@ export default async function ProductPage({ params }: Props) {
     },
   };
 
+  const breadcrumbItems = [
+    { name: 'خانه', item: site.url },
+    { name: 'مجموعه‌ها', item: `${site.url}/collections` },
+    ...(category ? [{ name: category.name, item: `${site.url}/collections/${category.slug}` }] : []),
+    { name: product.name, item: `${site.url}/products/${product.slug}` },
+  ];
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: breadcrumbItems.map((b, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: b.name,
+      item: b.item,
+    })),
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
       <nav aria-label="مسیر" className="text-xs text-ink-60">
         <Link href="/" className="hover:text-ink">خانه</Link>

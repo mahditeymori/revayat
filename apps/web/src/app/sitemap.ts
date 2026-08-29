@@ -23,6 +23,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${site.url}/products/${p.slug}`,
       changeFrequency: 'weekly' as const,
       priority: 0.9,
+      images: p.images.map((src) => `${site.url}${src}`),
     })),
     { url: `${site.url}/about`, changeFrequency: 'monthly' as const, priority: 0.5 },
     ...staticPages.map((p) => ({

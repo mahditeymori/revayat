@@ -3,12 +3,14 @@
 import { useActionState, useEffect } from 'react';
 import { addToCartAction, type CartActionState } from '@/app/cart/actions';
 import { trackEvent } from '@/components/Track';
+import { useCart } from '@/components/cart/CartProvider';
 import type { Product } from '@/lib/catalog';
 
 const INITIAL: CartActionState = { error: null, ok: false };
 
 export function AddToCartForm({ product }: { product: Product }) {
   const [state, action, pending] = useActionState(addToCartAction, INITIAL);
+  const { open } = useCart();
 
   // One product_view per mount — the product page is where intent starts, and
   // it anchors the view→cart→order funnel in the admin dashboard.
@@ -20,7 +22,8 @@ export function AddToCartForm({ product }: { product: Product }) {
     if (!state.ok) return;
     window.dispatchEvent(new Event('cart:updated'));
     trackEvent('add_to_cart', { productId: product.id });
-  }, [state, product.id]);
+    open();
+  }, [state, product.id, open]);
 
   return (
     <form action={action} className="space-y-6">

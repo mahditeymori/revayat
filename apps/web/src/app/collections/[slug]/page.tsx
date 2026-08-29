@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getCategories, getProducts, safe, type ProductQuery } from '@/lib/catalog';
 import { ProductCard } from '@/components/ProductCard';
+import { site } from '@/lib/site';
 
 export const revalidate = 300;
 
@@ -59,8 +60,19 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   if (sort === 'price-asc' || sort === 'price-desc') query.sort = sort;
   const products = await safe(getProducts(query), []);
 
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'خانه', item: site.url },
+      { '@type': 'ListItem', position: 2, name: 'مجموعه‌ها', item: `${site.url}/collections` },
+      { '@type': 'ListItem', position: 3, name: col.name, item: `${site.url}/collections/${slug}` },
+    ],
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <nav aria-label="مسیر" className="text-xs text-ink-60">
         <Link href="/" className="hover:text-ink">خانه</Link>
         <span className="mx-2">/</span>

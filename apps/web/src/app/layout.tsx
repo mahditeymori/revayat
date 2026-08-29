@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { site, nav } from '@/lib/site';
 import { getSettings, getSupportContent, safe } from '@/lib/catalog';
 import { DEFAULT_SUPPORT_CONTENT } from '@/lib/faq';
-import { CartBadge } from '@/components/CartBadge';
-import { CartIcon } from '@/components/CartIcon';
+import { CartProvider } from '@/components/cart/CartProvider';
+import { CartDrawer } from '@/components/cart/CartDrawer';
+import { CartTrigger } from '@/components/cart/CartTrigger';
 import { Track } from '@/components/Track';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { SupportWidget } from '@/components/SupportWidget';
@@ -80,23 +81,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:right-4 focus:top-4 focus:z-50 focus:bg-ink focus:px-4 focus:py-2 focus:text-cream"
-        >
-          رفتن به محتوای اصلی
-        </a>
-        {settings?.announcement && (
-          <p className="bg-ink px-4 py-2 text-center text-xs text-cream">{settings.announcement}</p>
-        )}
-        <Header />
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-        <Footer footerText={settings?.footerText} />
-        <Track />
-        <ConsentBanner />
-        <SupportWidget content={supportContent} />
+        <CartProvider>
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:absolute focus:right-4 focus:top-4 focus:z-50 focus:bg-ink focus:px-4 focus:py-2 focus:text-cream"
+          >
+            رفتن به محتوای اصلی
+          </a>
+          {settings?.announcement && (
+            <p className="bg-ink px-4 py-2 text-center text-xs text-cream">{settings.announcement}</p>
+          )}
+          <Header />
+          <main id="main" className="flex-1">
+            {children}
+          </main>
+          <Footer footerText={settings?.footerText} />
+          <Track />
+          <ConsentBanner />
+          <SupportWidget content={supportContent} />
+          <CartDrawer />
+        </CartProvider>
       </body>
     </html>
   );
@@ -120,10 +124,7 @@ function Header() {
           <Link href="/search" className="hover:text-sand-dark">
             جستجو
           </Link>
-          <Link href="/cart" className="relative flex items-center hover:opacity-75" aria-label="سبد خرید">
-            <CartIcon />
-            <CartBadge />
-          </Link>
+          <CartTrigger />
         </div>
       </div>
     </header>
