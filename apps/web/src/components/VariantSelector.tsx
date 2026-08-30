@@ -1,7 +1,8 @@
 'use client';
 
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useEffect, useMemo, useState } from 'react';
 import { addToCartAction, type CartActionState } from '@/app/cart/actions';
+import { useCart } from '@/components/cart/CartProvider';
 import { formatToman } from '@/lib/format';
 import type { Product, ProductVariant } from '@/lib/commerce/types';
 
@@ -20,6 +21,12 @@ function findVariant(
 
 export function VariantSelector({ product }: { product: Product }) {
   const [state, action, pending] = useActionState(addToCartAction, INITIAL);
+  const { afterAdd } = useCart();
+
+  useEffect(() => {
+    if (state.ok) afterAdd();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   const defaultVariant = useMemo(
     () => product.variants.find((v) => v.availableForSale) ?? product.variants[0],

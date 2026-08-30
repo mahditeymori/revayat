@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { site, nav } from '@/lib/site';
 import { organizationJsonLd, websiteJsonLd } from '@/lib/seo/json-ld';
+import { CartProvider } from '@/components/cart/CartProvider';
+import { CartDrawer } from '@/components/cart/CartDrawer';
+import { CartTrigger } from '@/components/cart/CartTrigger';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -55,11 +58,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           رفتن به محتوای اصلی
         </a>
-        <Header />
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-        <Footer />
+        <CartProvider>
+          <Header />
+          <main id="main" className="flex-1">
+            {children}
+          </main>
+          <Footer />
+          <CartDrawer />
+        </CartProvider>
       </body>
     </html>
   );
@@ -83,6 +89,7 @@ function Header() {
           <Link href="/search" className="hover:text-sand-dark">
             جستجو
           </Link>
+          <CartTrigger />
         </div>
       </div>
     </header>
