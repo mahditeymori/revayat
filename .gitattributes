@@ -1,4 +1,0 @@
-# Shell scripts must keep LF endings — CRLF breaks the shebang in Alpine
-# containers ("no such file or directory" on an otherwise valid script).
-*.sh text eol=lf
-docker-entrypoint.sh text eol=lf
