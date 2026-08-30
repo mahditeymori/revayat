@@ -1,0 +1,46 @@
+{
+  "name": "revayat-web",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate",
+    "db:studio": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs studio",
+    "db:seed-admin": "node --env-file=.env.local --experimental-strip-types scripts/seed-admin.ts",
+    "migrate:legacy-json": "node --env-file=.env.local --experimental-strip-types scripts/migrate-legacy-json.ts",
+    "release-expired-reservations": "node --env-file=.env.local --experimental-strip-types scripts/release-expired-reservations.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/vazirmatn": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@lottiefiles/dotlottie-react": "^0.14.3",
+    "bcryptjs": "^2.4.3",
+    "drizzle-orm": "^0.45.2",
+    "next": "^16.3.3",
+    "postgres": "^3.4.5",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "server-only": "^0.0.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "22.10.7",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.18.0",
+    "eslint-config-next": "^16.3.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

@@ -1,0 +1,99 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-revayat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-revayat}
+    volumes:
+      - revayat_pgdata:/var/lib/postgresql/data
+    expose:
+      - '5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-revayat} -d ${POSTGRES_DB:-revayat}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    # Production pulls a prebuilt image from GHCR (see .github/workflows/deploy.yml).
+    # WEB_IMAGE pins the exact tag deployed, which is what makes rollback a retag
+    # rather than a rebuild. Local dev overrides this via docker-compose.override.yml.
+    image: ${WEB_IMAGE:-ghcr.io/mahditeymori/revayat-web:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+      NEXT_PUBLIC_ENAMAD_CODE: ${NEXT_PUBLIC_ENAMAD_CODE}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-revayat}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-revayat}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
+      # Zibal merchant id. Server-side only — never NEXT_PUBLIC_.
+      ZIBAL_MERCHANT: ${ZIBAL_MERCHANT}
+    volumes:
+      # Admin-uploaded product images. Nothing here is baked into the image —
+      # see apps/web/docker-entrypoint.sh / lib/media/local-storage.ts.
+      - revayat_uploads:/app/uploads
+    expose:
+      - '3000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-revayat}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-revayat}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - revayat_backups:/backups
+      - ./pg-backup-entrypoint.sh:/pg-backup-entrypoint.sh:ro
+    entrypoint: ['/bin/sh', '/pg-backup-entrypoint.sh']
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+      # certbot writes the placeholder certificate nginx needs to boot
+      - certbot
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx-entrypoint.sh:/nginx-entrypoint.sh:ro
+      # not :ro — the entrypoint writes a placeholder cert here on first boot
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot:ro
+    entrypoint: ['/bin/sh', '/nginx-entrypoint.sh']
+
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    environment:
+      CERT_DOMAIN: ${CERT_DOMAIN:-revayat.shop}
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+      - ./certbot-entrypoint.sh:/certbot-entrypoint.sh:ro
+    entrypoint: ['/bin/sh', '/certbot-entrypoint.sh']
+
+volumes:
+  revayat_pgdata:
+  revayat_uploads:
+  revayat_backups:
+  certbot_conf:
+  certbot_www:
