@@ -157,3 +157,14 @@ export async function removeFromCart(cartToken: string, itemId: string): Promise
   await db.update(carts).set({ updatedAt: new Date() }).where(eq(carts.id, cartRow.id));
   return hydrateCart(cartRow);
 }
+
+// Called once by the payment callback route after a genuinely new 'paid'
+// outcome (never on 'already-paid' — the cart was already cleared the first
+// time round). A cart with no row for this token is a no-op, not an error:
+// the customer may have already opened a fresh tab.
+export async function clearCart(cartToken: string): Promise<void> {
+  const cartRow = await findCartRow(cartToken);
+  if (!cartRow) return;
+  await db.delete(cartItems).where(eq(cartItems.cartId, cartRow.id));
+  await db.update(carts).set({ updatedAt: new Date() }).where(eq(carts.id, cartRow.id));
+}

@@ -320,3 +320,13 @@ export async function reconcilePayment(paymentId: string): Promise<PaymentOutcom
 
   return applyDecision(paymentRow, normalizeInquiry(decision), call.data);
 }
+
+// Read-only lookup for the receipt page (/payment/result) — never used to
+// decide payment state, only to display what applyDecision already committed.
+export async function getSucceededPayment(orderId: number): Promise<PaymentRow | null> {
+  const row = await db.query.payments.findFirst({
+    where: and(eq(payments.orderId, orderId), eq(payments.status, 'succeeded')),
+    orderBy: (p, { desc: orderDesc }) => orderDesc(p.verifiedAt),
+  });
+  return row ?? null;
+}
