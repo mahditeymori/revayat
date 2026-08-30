@@ -2,7 +2,7 @@ import 'server-only';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { couponUsages, coupons } from '@/db/schema';
-import { RESERVATION_TTL_MS } from './inventory';
+import { CHECKOUT_HOLD_TTL_MS } from './inventory';
 import type { CouponRejectionReason, CouponValidationResult, DbClient } from './types';
 
 const ACTIVE_STATUSES = ['reserved', 'confirmed'] as const;
@@ -19,19 +19,23 @@ function computeDiscount(type: 'percentage' | 'fixed', value: number, subtotalRi
   return Math.min(value, subtotalRial);
 }
 
-export async function validateCoupon(
-  code: string,
+type CouponRow = typeof coupons.$inferSelect;
+
+// Shared eligibility checks behind both lookup paths below (by code at initial
+// checkout, by id when startPayment re-validates a lapsed hold on retry).
+// Parametrized by DbClient so it can run inside a transaction in either case.
+async function evaluateCoupon(
+  dbClient: DbClient,
+  coupon: CouponRow,
   phone: string,
   subtotalRial: number,
 ): Promise<CouponValidationResult> {
-  const coupon = await db.query.coupons.findFirst({ where: eq(coupons.code, code) });
-  if (!coupon) return { ok: false, reason: 'not_found' };
   if (!coupon.active) return { ok: false, reason: 'inactive' };
   if (coupon.expiresAt && coupon.expiresAt < new Date()) return { ok: false, reason: 'expired' };
   if (subtotalRial < coupon.minSubtotalRial) return { ok: false, reason: 'min_subtotal' };
 
   if (coupon.maxUsesTotal != null) {
-    const [totalRow] = await db
+    const [totalRow] = await dbClient
       .select({ count: sql<number>`count(*)::int` })
       .from(couponUsages)
       .where(and(eq(couponUsages.couponId, coupon.id), inArray(couponUsages.status, ACTIVE_STATUSES)));
@@ -40,7 +44,7 @@ export async function validateCoupon(
     }
   }
 
-  const [customerRow] = await db
+  const [customerRow] = await dbClient
     .select({ count: sql<number>`count(*)::int` })
     .from(couponUsages)
     .where(
@@ -57,36 +61,91 @@ export async function validateCoupon(
   return { ok: true, couponId: coupon.id, discountRial: computeDiscount(coupon.type, coupon.value, subtotalRial) };
 }
 
+// Looked up by code — the path used at initial checkout, where only the
+// user-entered code string is available. Accepts an optional dbClient so
+// createOrder can call it inside its own transaction.
+export async function validateCoupon(
+  code: string,
+  phone: string,
+  subtotalRial: number,
+  dbClient: DbClient = db,
+): Promise<CouponValidationResult> {
+  const coupon = await dbClient.query.coupons.findFirst({ where: eq(coupons.code, code) });
+  if (!coupon) return { ok: false, reason: 'not_found' };
+  return evaluateCoupon(dbClient, coupon, phone, subtotalRial);
+}
+
+// Looked up by id — used by lib/zibal/payment-flow.ts's startPayment when
+// re-establishing a lapsed hold on retry, since only orders.couponId (not the
+// original code string) is on hand at that point.
+export async function revalidateCouponById(
+  couponId: string,
+  phone: string,
+  subtotalRial: number,
+  dbClient: DbClient = db,
+): Promise<CouponValidationResult> {
+  const coupon = await dbClient.query.coupons.findFirst({ where: eq(coupons.id, couponId) });
+  if (!coupon) return { ok: false, reason: 'not_found' };
+  return evaluateCoupon(dbClient, coupon, phone, subtotalRial);
+}
+
 // Mirrors inventory.reserveStock: called only by orders.createOrder inside its
-// transaction, so the coupon hold and the order commit or roll back together.
+// transaction (short CHECKOUT_HOLD_TTL_MS hold) and by startPayment when
+// re-applying a coupon it just revalidated after a lapsed hold.
+//
+// Upserts on the (orderId) unique constraint — coupon_usages allows only one
+// row per order for its entire lifetime, so a retry that finds an existing
+// `released` row must revive it back to `reserved` rather than inserting a
+// second row, which would violate the unique index.
 export async function applyCoupon(
   dbClient: DbClient,
   orderId: number,
   couponId: string,
   phone: string,
+  ttlMs: number = CHECKOUT_HOLD_TTL_MS,
 ): Promise<void> {
-  await dbClient.insert(couponUsages).values({
-    couponId,
-    orderId,
-    customerPhone: phone,
-    status: 'reserved',
-    expiresAt: new Date(Date.now() + RESERVATION_TTL_MS),
-  });
+  const expiresAt = new Date(Date.now() + ttlMs);
+  await dbClient
+    .insert(couponUsages)
+    .values({ couponId, orderId, customerPhone: phone, status: 'reserved', expiresAt })
+    .onConflictDoUpdate({
+      target: couponUsages.orderId,
+      set: { couponId, customerPhone: phone, status: 'reserved', expiresAt },
+    });
 }
 
-// reserved -> confirmed, called alongside confirmReservations when a payment settles as paid.
-export async function confirmCoupon(dbClient: DbClient, orderId: number): Promise<void> {
-  await dbClient
+// Mirrors inventory.extendReservations: pushes the order's still-`reserved`
+// coupon usage out to now + ttlMs. Called by startPayment alongside
+// extendReservations once Zibal issues a trackId, and again on every retry.
+export async function extendCouponUsage(dbClient: DbClient, orderId: number, ttlMs: number): Promise<number> {
+  const expiresAt = new Date(Date.now() + ttlMs);
+  const rows = await dbClient
+    .update(couponUsages)
+    .set({ expiresAt })
+    .where(and(eq(couponUsages.orderId, orderId), eq(couponUsages.status, 'reserved')))
+    .returning({ id: couponUsages.id });
+  return rows.length;
+}
+
+// reserved -> confirmed, called alongside confirmReservations when a payment
+// settles as paid. Returns the affected row count for the same oversell-detection
+// purpose as confirmReservations.
+export async function confirmCoupon(dbClient: DbClient, orderId: number): Promise<number> {
+  const rows = await dbClient
     .update(couponUsages)
     .set({ status: 'confirmed' })
-    .where(and(eq(couponUsages.orderId, orderId), eq(couponUsages.status, 'reserved')));
+    .where(and(eq(couponUsages.orderId, orderId), eq(couponUsages.status, 'reserved')))
+    .returning({ id: couponUsages.id });
+  return rows.length;
 }
 
 // reserved -> released, called alongside releaseReservations on failed/canceled
 // payments and by the expiry sweep for abandoned checkouts.
-export async function releaseCoupon(dbClient: DbClient, orderId: number): Promise<void> {
-  await dbClient
+export async function releaseCoupon(dbClient: DbClient, orderId: number): Promise<number> {
+  const rows = await dbClient
     .update(couponUsages)
     .set({ status: 'released' })
-    .where(and(eq(couponUsages.orderId, orderId), eq(couponUsages.status, 'reserved')));
+    .where(and(eq(couponUsages.orderId, orderId), eq(couponUsages.status, 'reserved')))
+    .returning({ id: couponUsages.id });
+  return rows.length;
 }

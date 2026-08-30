@@ -123,7 +123,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     let discountRial = 0;
     let couponId: string | null = null;
     if (input.couponCode) {
-      const result = await validateCoupon(input.couponCode, input.shipping.phone, subtotalRial);
+      const result = await validateCoupon(input.couponCode, input.shipping.phone, subtotalRial, tx);
       if (!result.ok) {
         throw new CouponRejectedError(result.reason);
       }

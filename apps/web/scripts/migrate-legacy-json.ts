@@ -12,7 +12,14 @@ import { db } from '../src/db/client';
 import { categories, productImages, products, productVariants, siteSettings } from '../src/db/schema';
 import { normalizePersian } from '../src/lib/search/normalize';
 
-const DEFAULT_VARIANT_STOCK = 20;
+// DEV/TEST SEED DATA ONLY. The legacy catalog never tracked real per-variant
+// stock, so this is a placeholder count that lets the storefront function
+// immediately after migrating — it is NOT a real inventory figure and must
+// not be trusted for production selling. Override via
+// LEGACY_MIGRATION_DEFAULT_STOCK for a one-off run, but before any real
+// customer traffic hits production, an admin MUST re-enter true per-variant
+// stock through the inventory admin page.
+const DEFAULT_VARIANT_STOCK = Number(process.env.LEGACY_MIGRATION_DEFAULT_STOCK ?? 20);
 
 type LegacyCategory = { slug: string; name: string; description: string };
 type LegacyProduct = {
