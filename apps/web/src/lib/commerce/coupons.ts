@@ -65,27 +65,34 @@ async function evaluateCoupon(
 // Looked up by code — the path used at initial checkout, where only the
 // user-entered code string is available. Accepts an optional dbClient so
 // createOrder can call it inside its own transaction.
+//
+// Row-locked (for('update')): evaluateCoupon's maxUsesTotal/maxUsesPerCustomer
+// checks are otherwise a plain read-then-insert with no ordering guarantee,
+// so two concurrent checkouts against the same coupon could both read "under
+// the limit" and both insert — locking the coupon row for the caller's
+// transaction serializes redemptions of that one coupon, mirroring the
+// per-variant lock inventory.ts's reserveStock already takes.
 export async function validateCoupon(
   code: string,
   phone: string,
   subtotalRial: number,
   dbClient: DbClient = db,
 ): Promise<CouponValidationResult> {
-  const coupon = await dbClient.query.coupons.findFirst({ where: eq(coupons.code, code) });
+  const [coupon] = await dbClient.select().from(coupons).where(eq(coupons.code, code)).for('update');
   if (!coupon) return { ok: false, reason: 'not_found' };
   return evaluateCoupon(dbClient, coupon, phone, subtotalRial);
 }
 
 // Looked up by id — used by lib/zibal/payment-flow.ts's startPayment when
 // re-establishing a lapsed hold on retry, since only orders.couponId (not the
-// original code string) is on hand at that point.
+// original code string) is on hand at that point. Same row lock as above.
 export async function revalidateCouponById(
   couponId: string,
   phone: string,
   subtotalRial: number,
   dbClient: DbClient = db,
 ): Promise<CouponValidationResult> {
-  const coupon = await dbClient.query.coupons.findFirst({ where: eq(coupons.id, couponId) });
+  const [coupon] = await dbClient.select().from(coupons).where(eq(coupons.id, couponId)).for('update');
   if (!coupon) return { ok: false, reason: 'not_found' };
   return evaluateCoupon(dbClient, coupon, phone, subtotalRial);
 }

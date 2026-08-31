@@ -26,8 +26,9 @@ export async function loginAdmin(email: string, password: string): Promise<Login
   const h = await headers();
   const ip = h.get('x-forwarded-for') ?? h.get('x-real-ip') ?? 'unknown';
 
-  // Defense-in-depth alongside middleware's coarser IP limiting: this domain
-  // function enforces its own throttle regardless of what middleware does.
+  // There is no separate middleware.ts in this app — this domain function is
+  // the only rate-limit enforcement for login, keyed by both IP and email so
+  // neither a single IP nor a single account can be brute-forced.
   const [byIp, byEmail] = await Promise.all([
     checkRateLimit(`admin-login:ip:${ip}`, { limit: 10, windowMs: LOCKOUT_MS }),
     checkRateLimit(`admin-login:email:${email.toLowerCase()}`, { limit: 5, windowMs: LOCKOUT_MS }),

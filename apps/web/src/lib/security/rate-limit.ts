@@ -6,10 +6,11 @@ import { rateLimits } from '@/db/schema';
 export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterMs: number };
 
 // DB-backed sliding-window limiter, called directly from domain functions
-// (admin login, checkout/startPayment, coupon validation) as defense-in-depth
-// alongside — never instead of — the coarser IP-based limits in
-// middleware.ts. Middleware alone would leave these critical operations
-// unprotected if it were ever bypassed or misconfigured.
+// (admin login, checkout submission, payment start/retry, admin payment
+// inquiry). There is no separate middleware.ts in this app — this IS the
+// enforcement layer, deliberately placed in domain logic rather than a
+// framework middleware so it can't be silently bypassed by a route that
+// forgets to opt in to the middleware matcher.
 export async function checkRateLimit(
   key: string,
   { limit, windowMs }: { limit: number; windowMs: number },

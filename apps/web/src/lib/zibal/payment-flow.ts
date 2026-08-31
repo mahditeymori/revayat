@@ -19,6 +19,7 @@ import 'server-only';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { orderItems, orders, payments } from '@/db/schema';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import {
   applyCoupon,
   CouponRejectedError,
@@ -58,9 +59,15 @@ export type StartPaymentResult =
   | { ok: true; paymentId: string; trackId: string; startUrl: string }
   | {
       ok: false;
-      reason: 'not-found' | 'already-paid' | 'insufficient-stock' | 'coupon-rejected' | 'gateway-error';
+      reason: 'not-found' | 'already-paid' | 'insufficient-stock' | 'coupon-rejected' | 'gateway-error' | 'rate-limited';
       message: string;
     };
+
+// One gate covers both the initial checkout submit and the "retry payment"
+// action — both call startPayment, so limiting it here (not in each caller)
+// is enough to bound how many Zibal /v1/request calls one order can trigger.
+const START_PAYMENT_WINDOW_MS = 10 * 60 * 1000;
+const START_PAYMENT_LIMIT = 5;
 
 export type PaymentOutcome =
   | { kind: 'paid'; orderId: number; alreadyVerified: boolean }
@@ -107,6 +114,14 @@ export async function startPayment(orderId: number, mobile?: string): Promise<St
   // (stale tab, double click on "pay") must never be charged a second time.
   if (order.paymentStatus === 'paid') {
     return { ok: false, reason: 'already-paid', message: 'این سفارش قبلاً پرداخت شده است.' };
+  }
+
+  const rateLimit = await checkRateLimit(`payment-start:order:${orderId}`, {
+    limit: START_PAYMENT_LIMIT,
+    windowMs: START_PAYMENT_WINDOW_MS,
+  });
+  if (!rateLimit.allowed) {
+    return { ok: false, reason: 'rate-limited', message: 'تعداد تلاش‌های پرداخت برای این سفارش بیش از حد مجاز است.' };
   }
 
   try {
@@ -307,6 +322,12 @@ export async function reconcilePayment(paymentId: string): Promise<PaymentOutcom
   if (!paymentRow || !paymentRow.trackId) return { kind: 'not-found' };
 
   if (paymentRow.status !== 'pending') return cachedOutcome(paymentRow);
+
+  // Already behind admin auth (the caller requires payments.inquiry), but a
+  // repeated-click loop still shouldn't be able to hammer Zibal's /v1/inquiry
+  // indefinitely for one payment.
+  const rateLimit = await checkRateLimit(`payment-inquiry:${paymentId}`, { limit: 20, windowMs: 10 * 60 * 1000 });
+  if (!rateLimit.allowed) return { kind: 'query-failed', orderId: paymentRow.orderId };
 
   const call = await inquirePayment(paymentRow.trackId);
   if (!call.ok) {

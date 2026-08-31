@@ -7,21 +7,32 @@
 // gateway. Every failure redirects back to /checkout (or /payment/failed once
 // an order actually exists) with an `error` query param instead of throwing —
 // there is nothing here a customer can retry by resubmitting a raw error page.
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCart } from '@/lib/commerce/cart';
 import { createOrder, CouponRejectedError, InsufficientStockError } from '@/lib/commerce/orders';
 import { validateShippingForm } from '@/lib/commerce/checkoutValidation';
 import { startPayment } from '@/lib/zibal/payment-flow';
 import { isConfigured } from '@/lib/zibal/client';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 
 const CART_COOKIE = 'cartToken';
+const SUBMIT_WINDOW_MS = 10 * 60 * 1000;
 
 function backToCheckout(error: string): never {
   redirect(`/checkout?error=${error}`);
 }
 
 export async function submitCheckoutAction(formData: FormData): Promise<void> {
+  const h = await headers();
+  const ip = h.get('x-forwarded-for') ?? h.get('x-real-ip') ?? 'unknown';
+  // Abuse-proofing for order creation (which itself validates the coupon and
+  // reserves stock) — separate from startPayment's own per-order limit below,
+  // since a single IP hammering "new checkout" spam is a different attack
+  // shape than one order's payment being retried.
+  const submitLimit = await checkRateLimit(`checkout-submit:ip:${ip}`, { limit: 10, windowMs: SUBMIT_WINDOW_MS });
+  if (!submitLimit.allowed) backToCheckout('rate-limited');
+
   const cartToken = (await cookies()).get(CART_COOKIE)?.value;
   const cart = await getCart(cartToken);
   if (!cart || cart.items.length === 0) redirect('/cart');

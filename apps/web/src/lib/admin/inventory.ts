@@ -3,6 +3,7 @@ import { desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { updateTag } from 'next/cache';
 import { db } from '@/db/client';
 import { inventoryAdjustments, inventoryReservations, productVariants, products } from '@/db/schema';
+import { computeResultingStock } from './inventoryValidation';
 
 const ACTIVE_RESERVATION_STATUSES = ['reserved', 'confirmed'] as const;
 
@@ -65,8 +66,7 @@ export async function adjustStock(
       .for('update');
     if (!variant) throw new Error('تنوع محصول یافت نشد.');
 
-    const resultingStock = variant.stock + delta;
-    if (resultingStock < 0) throw new Error('موجودی نمی‌تواند منفی شود.');
+    const resultingStock = computeResultingStock(variant.stock, delta);
 
     await tx.update(productVariants).set({ stock: resultingStock }).where(eq(productVariants.id, variantId));
     await tx.insert(inventoryAdjustments).values({ variantId, adminId, delta, resultingStock, reason });
