@@ -11,6 +11,7 @@ export type StoredFile = {
 // lib/commerce/*) never change.
 export interface MediaStorage {
   put(input: { key: string; data: Buffer; contentType: string }): Promise<StoredFile>;
+  get(key: string): Promise<Buffer>;
   getUrl(key: string): string;
   delete(key: string): Promise<void>;
 }

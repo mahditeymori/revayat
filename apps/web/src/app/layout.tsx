@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { site, nav } from '@/lib/site';
 import { organizationJsonLd, websiteJsonLd } from '@/lib/seo/json-ld';
+import { getSiteSettings } from '@/lib/commerce/settings';
+import { listSupportPages } from '@/lib/commerce/support';
+import { safe } from '@/lib/safe';
 import { CartProvider } from '@/components/cart/CartProvider';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 import { CartTrigger } from '@/components/cart/CartTrigger';
@@ -40,7 +43,12 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const [settings, supportPages] = await Promise.all([
+    safe(getSiteSettings(), null),
+    safe(listSupportPages(), []),
+  ]);
+
   return (
     <html lang="fa" dir="rtl">
       <body className="flex min-h-screen flex-col bg-cream text-ink antialiased">
@@ -59,11 +67,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           رفتن به محتوای اصلی
         </a>
         <CartProvider>
+          {settings?.announcement && (
+            <div className="bg-ink px-4 py-2 text-center text-xs text-cream">{settings.announcement}</div>
+          )}
           <Header />
           <main id="main" className="flex-1">
             {children}
           </main>
-          <Footer />
+          <Footer footerText={settings?.footerText} supportPages={supportPages} />
           <CartDrawer />
         </CartProvider>
       </body>
@@ -96,13 +107,19 @@ function Header() {
   );
 }
 
-function Footer() {
+function Footer({
+  footerText,
+  supportPages,
+}: {
+  footerText?: string;
+  supportPages: { slug: string; title: string }[];
+}) {
   return (
     <footer className="mt-24 border-t border-cream-200 bg-cream-50">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-3">
         <div>
           <p className="wordmark text-base">{site.name}</p>
-          <p className="mt-4 max-w-sm text-sm leading-8 text-ink-60">{site.description}</p>
+          <p className="mt-4 max-w-sm text-sm leading-8 text-ink-60">{footerText || site.description}</p>
         </div>
 
         <nav aria-label="فوتر" className="text-sm">
@@ -121,6 +138,18 @@ function Footer() {
         <nav aria-label="درباره" className="text-sm">
           <p className="mb-4 font-medium">درباره ما</p>
           <ul className="space-y-3 text-ink-60">
+            {supportPages.map((p) => (
+              <li key={p.slug}>
+                <Link href={`/support/${p.slug}`} className="hover:text-ink">
+                  {p.title}
+                </Link>
+              </li>
+            ))}
+            <li>
+              <Link href="/faq" className="hover:text-ink">
+                سوالات متداول
+              </Link>
+            </li>
             <li>
               <a
                 href={site.socials.instagram}
@@ -133,6 +162,28 @@ function Footer() {
             </li>
           </ul>
         </nav>
+
+        {site.enamadCode && (
+          <div className="text-sm">
+            <p className="mb-4 font-medium">اعتماد</p>
+            <a
+              referrerPolicy="origin"
+              target="_blank"
+              rel="noopener noreferrer"
+              href={`https://trustseal.enamad.ir/?id=${site.enamadCode}&Code=${site.enamadCode}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- Enamad seal must be an
+                  unmodified <img> from their own host; next/image would re-encode it and
+                  invalidate the seal (see CSP comment in next.config.mjs). */}
+              <img
+                referrerPolicy="origin"
+                src={`https://trustseal.enamad.ir/logo.aspx?id=${site.enamadCode}&Code=${site.enamadCode}`}
+                alt="نماد اعتماد الکترونیکی"
+                className="h-24 w-24"
+              />
+            </a>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-cream-200 px-4 py-6 text-center text-xs text-ink-60 sm:px-6">

@@ -41,16 +41,18 @@ export const POST = GET;
 async function resolveRedirect(outcome: PaymentOutcome): Promise<string> {
   switch (outcome.kind) {
     case 'paid': {
-      // Only a genuinely new payment clears the cart — 'already-paid' is a
-      // repeated callback for an order already settled on the first pass.
-      if (!outcome.alreadyVerified) {
-        const order = await getOrder(outcome.orderId);
-        if (order) {
-          await clearCart(order.cartToken).catch((err) => {
-            // A cart that fails to clear is a nuisance, not a lost order.
-            console.error('[payment] could not clear the cart after payment:', err);
-          });
-        }
+      // Cleared unconditionally, even when alreadyVerified is true: a crash
+      // between applyDecision() committing 'paid' and this call running would
+      // otherwise leave a paid customer's cart populated forever, since a
+      // replayed callback short-circuits straight to the cached outcome and
+      // never re-runs applyDecision. clearCart() is itself a no-op past the
+      // first successful run, so calling it again here is always safe.
+      const order = await getOrder(outcome.orderId);
+      if (order) {
+        await clearCart(order.cartToken).catch((err) => {
+          // A cart that fails to clear is a nuisance, not a lost order.
+          console.error('[payment] could not clear the cart after payment:', err);
+        });
       }
       return `/payment/result?order=${outcome.orderId}`;
     }

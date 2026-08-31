@@ -1,5 +1,5 @@
 import 'server-only';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { MediaStorage, StoredFile } from './storage';
 
@@ -24,6 +24,10 @@ export const localMediaStorage: MediaStorage = {
     await mkdir(path.dirname(dest), { recursive: true });
     await writeFile(dest, data);
     return { storageKey: key, url: localMediaStorage.getUrl(key) };
+  },
+
+  async get(key) {
+    return readFile(assertSafeKey(key));
   },
 
   getUrl(key) {

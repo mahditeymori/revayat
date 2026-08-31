@@ -24,7 +24,7 @@ const tsvector = customType<{ data: string }>({
 // Enums
 // ---------------------------------------------------------------------------
 
-export const adminRoleEnum = pgEnum('admin_role', ['owner', 'admin']);
+export const adminRoleEnum = pgEnum('admin_role', ['owner', 'admin', 'editor', 'support']);
 
 export const orderStatusEnum = pgEnum('order_status', [
   'pending',
@@ -66,6 +66,12 @@ export const categories = pgTable('categories', {
   description: text('description').notNull().default(''),
   imageUrl: text('image_url'),
   sortOrder: integer('sort_order').notNull().default(0),
+  // Archived (not active) categories drop out of storefront listings but are
+  // never hard-deleted while products still reference them — admin uses this
+  // instead of a real DELETE so a category with live products can be safely
+  // retired without corrupting products.category_id (which is ON DELETE SET
+  // NULL and would otherwise silently orphan them).
+  active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -315,6 +321,10 @@ export const coupons = pgTable('coupons', {
   minSubtotalRial: integer('min_subtotal_rial').notNull().default(0),
   active: boolean('active').notNull().default(true),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
+  // When set, only this phone number may redeem the coupon (checked
+  // alongside the normal active/expiry/usage checks in evaluateCoupon).
+  // Null means unrestricted.
+  assignedPhone: text('assigned_phone'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -351,6 +361,10 @@ export const admins = pgTable('admins', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   role: adminRoleEnum('role').notNull().default('owner'),
+  // OWNER-revoked admins are deactivated, never deleted — preserves the
+  // audit trail (who did what) while immediately blocking login and
+  // invalidating every existing session (see lib/admin/session.ts).
+  active: boolean('active').notNull().default(true),
   failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -370,6 +384,26 @@ export const adminSessions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('admin_sessions_admin_id_idx').on(table.adminId)],
+);
+
+// One row per manual stock change made in /admin/inventory — additive audit
+// log, never updated or deleted, so "what happened to this variant's stock
+// and who did it" stays answerable regardless of what the row's resulting
+// value later becomes.
+export const inventoryAdjustments = pgTable(
+  'inventory_adjustments',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    variantId: uuid('variant_id')
+      .notNull()
+      .references(() => productVariants.id, { onDelete: 'cascade' }),
+    adminId: uuid('admin_id').references(() => admins.id, { onDelete: 'set null' }),
+    delta: integer('delta').notNull(),
+    resultingStock: integer('resulting_stock').notNull(),
+    reason: text('reason').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('inventory_adjustments_variant_id_idx').on(table.variantId)],
 );
 
 // Generic sliding-window counter, called directly from domain functions

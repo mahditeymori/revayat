@@ -111,7 +111,8 @@ export type CouponRejectionReason =
   | 'inactive'
   | 'expired'
   | 'min_subtotal'
-  | 'usage_limit_reached';
+  | 'usage_limit_reached'
+  | 'not_assigned_to_phone';
 
 export type CouponValidationResult =
   | { ok: true; couponId: string; discountRial: number }

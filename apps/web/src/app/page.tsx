@@ -2,20 +2,26 @@ import Link from 'next/link';
 import { site } from '@/lib/site';
 import { getProducts } from '@/lib/commerce/products';
 import { getCategories } from '@/lib/commerce/categories';
+import { getSiteSettings } from '@/lib/commerce/settings';
 import { ProductCard } from '@/components/ProductCard';
 import { safe } from '@/lib/safe';
 
 export default async function HomePage() {
-  const [featured, categories] = await Promise.all([
+  const [featured, categories, settings] = await Promise.all([
     safe(getProducts({ featured: true }), []),
     safe(getCategories(), []),
+    safe(getSiteSettings(), { announcement: '', heroTitle: '', heroSubtitle: '', heroImageUrl: null, footerText: '' }),
   ]);
 
   return (
     <>
       <section className="mx-auto max-w-5xl px-4 py-20 text-center sm:py-28">
-        <h1 className="wordmark text-3xl text-ink sm:text-4xl">{site.nameFa}</h1>
-        <p className="mx-auto mt-4 max-w-xl text-ink-60">{site.tagline}</p>
+        {settings.heroImageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded, arbitrary-origin hero image
+          <img src={settings.heroImageUrl} alt="" className="mx-auto mb-8 max-h-64 object-contain" />
+        )}
+        <h1 className="wordmark text-3xl text-ink sm:text-4xl">{settings.heroTitle || site.nameFa}</h1>
+        <p className="mx-auto mt-4 max-w-xl text-ink-60">{settings.heroSubtitle || site.tagline}</p>
         <Link
           href="/collections"
           className="mt-8 inline-block border border-ink px-8 py-3 text-sm hover:bg-ink hover:text-cream"

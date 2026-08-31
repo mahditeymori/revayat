@@ -32,6 +32,7 @@ async function evaluateCoupon(
 ): Promise<CouponValidationResult> {
   if (!coupon.active) return { ok: false, reason: 'inactive' };
   if (coupon.expiresAt && coupon.expiresAt < new Date()) return { ok: false, reason: 'expired' };
+  if (coupon.assignedPhone && coupon.assignedPhone !== phone) return { ok: false, reason: 'not_assigned_to_phone' };
   if (subtotalRial < coupon.minSubtotalRial) return { ok: false, reason: 'min_subtotal' };
 
   if (coupon.maxUsesTotal != null) {

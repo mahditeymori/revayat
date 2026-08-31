@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getOrder } from '@/lib/commerce/orders';
+import { clearCart } from '@/lib/commerce/cart';
 import { getSucceededPayment } from '@/lib/zibal/payment-flow';
 import { formatToman, toPersianDigits } from '@/lib/format';
 
@@ -20,6 +21,15 @@ export default async function PaymentResultPage({ searchParams }: Props) {
   const order = await getOrder(orderId);
   if (!order) redirect('/cart');
   if (order.paymentStatus !== 'paid') redirect(`/payment/failed?order=${order.id}`);
+
+  // Idempotent safety net: normally the callback route already cleared the
+  // cart, but a crash between that commit and its own clearCart() call would
+  // otherwise leave a paid customer's cart populated with no later chance to
+  // fix it — this page is the other place a paid order is confirmed, so it
+  // gets the same no-op-safe call.
+  await clearCart(order.cartToken).catch((err) => {
+    console.error('[payment] could not clear the cart on the result page:', err);
+  });
 
   const payment = await getSucceededPayment(order.id);
 

@@ -24,6 +24,7 @@ const ERRORS: Record<string, string> = {
   'coupon-expired': 'این کد تخفیف منقضی شده است.',
   'coupon-min_subtotal': 'مبلغ سبد خرید برای استفاده از این کد تخفیف کافی نیست.',
   'coupon-usage_limit_reached': 'سقف استفاده از این کد تخفیف پر شده است.',
+  'coupon-not_assigned_to_phone': 'این کد تخفیف مخصوص شماره موبایل دیگری است.',
   unknown: 'مشکلی در ثبت سفارش پیش آمد. دوباره تلاش کنید.',
 };
 
