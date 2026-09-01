@@ -1,11 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getCategories, getCategory } from '@/lib/commerce/categories';
+import { getCategory } from '@/lib/commerce/categories';
 import { getProducts, type GetProductsParams } from '@/lib/commerce/products';
 import { ProductCard } from '@/components/ProductCard';
 import { site } from '@/lib/site';
-import { safe } from '@/lib/safe';
+
+// Not statically generated: categories are admin-editable, so a build-time
+// param list would go stale, and generateStaticParams here collided with
+// this page's searchParams read (DYNAMIC_SERVER_USAGE) for any slug outside
+// that list — 500s on every category not present at build time, including
+// the hardcoded 'new'/'sale' virtual collections. Every sibling commerce
+// route (/products/[slug], /search, /checkout) is already fully dynamic.
+export const dynamic = 'force-dynamic';
 
 // 'new' and 'sale' are virtual collections layered on top of the category
 // list — they map to a getProducts() query, not a categories row.
@@ -47,11 +54,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description: col.description,
     alternates: { canonical: `/collections/${col.slug}` },
   };
-}
-
-export async function generateStaticParams() {
-  const categories = await safe(getCategories(), []);
-  return categories.map((c) => ({ slug: c.slug }));
 }
 
 export default async function CollectionPage({ params, searchParams }: Props) {
