@@ -18,7 +18,12 @@ export default async function HomePage() {
       <section className="mx-auto max-w-5xl px-4 py-20 text-center sm:py-28">
         {settings.heroImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded, arbitrary-origin hero image
-          <img src={settings.heroImageUrl} alt="" className="mx-auto mb-8 max-h-64 object-contain" />
+          <img
+            src={settings.heroImageUrl}
+            alt={settings.heroTitle || site.nameFa}
+            fetchPriority="high"
+            className="mx-auto mb-8 max-h-64 object-contain"
+          />
         )}
         <h1 className="wordmark text-3xl text-ink sm:text-4xl">{settings.heroTitle || site.nameFa}</h1>
         <p className="mx-auto mt-4 max-w-xl text-ink-60">{settings.heroSubtitle || site.tagline}</p>

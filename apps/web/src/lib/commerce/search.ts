@@ -52,7 +52,11 @@ export const searchProducts = unstable_cache(
       .from(products)
       .leftJoin(categories, eq(products.categoryId, categories.id))
       .where(and(...conditions))
-      .orderBy(orderBy);
+      .orderBy(orderBy)
+      // ponytail: no pagination UI yet, so cap instead — a search page with
+      // >200 results is unusable anyway. Add real pagination when the catalog
+      // or query patterns need more than one page of results.
+      .limit(200);
 
     return hydrateProducts(baseRows);
   },

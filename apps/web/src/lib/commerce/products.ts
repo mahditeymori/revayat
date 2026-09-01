@@ -188,6 +188,10 @@ export type GetProductsParams = {
   sort?: SortKey;
 };
 
+// Deliberately unbounded (no .limit()): sitemap.ts calls this with no filter
+// to enumerate every active product URL, so capping it here would silently
+// drop products from the sitemap. Revisit with real pagination if the
+// catalog grows large enough that this listing query becomes slow.
 export const getProducts = unstable_cache(
   async (params: GetProductsParams = {}): Promise<Product[]> => {
     const conditions: SQL[] = [eq(products.active, true)];
