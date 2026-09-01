@@ -3,9 +3,22 @@
 // npm run db:seed-admin`. Refuses to run if any admin already exists — use
 // the /admin/admins UI (owner-only) to add more after that.
 import bcrypt from 'bcryptjs';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
-import { db } from '../src/db/client';
-import { admins } from '../src/db/schema';
+import postgres from 'postgres';
+import { admins } from '../src/db/schema.ts';
+
+// Own connection, not src/db/client.ts: that module imports 'server-only',
+// which throws unconditionally outside a Next.js bundle. Standalone scripts
+// run under plain node, so they need a bare drizzle client (same pattern as
+// migrate.mjs).
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error('[seed-admin] DATABASE_URL is not set');
+  process.exit(1);
+}
+const client = postgres(connectionString, { max: 1 });
+const db = drizzle(client, { schema: { admins } });
 
 const BCRYPT_ROUNDS = 12;
 
@@ -33,6 +46,7 @@ async function main() {
 }
 
 main()
+  .then(() => client.end())
   .then(() => process.exit(0))
   .catch((err) => {
     console.error(err);

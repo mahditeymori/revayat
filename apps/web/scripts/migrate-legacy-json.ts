@@ -7,10 +7,23 @@
 // exists as a product.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
-import { db } from '../src/db/client';
-import { categories, productImages, products, productVariants, siteSettings } from '../src/db/schema';
-import { normalizePersian } from '../src/lib/search/normalize';
+import postgres from 'postgres';
+import { categories, productImages, products, productVariants, siteSettings } from '../src/db/schema.ts';
+import { normalizePersian } from '../src/lib/search/normalize.ts';
+
+// Own connection, not src/db/client.ts: that module imports 'server-only',
+// which throws unconditionally outside a Next.js bundle. Standalone scripts
+// run under plain node, so they need a bare drizzle client (same pattern as
+// migrate.mjs).
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error('[migrate-legacy-json] DATABASE_URL is not set');
+  process.exit(1);
+}
+const client = postgres(connectionString, { max: 1 });
+const db = drizzle(client, { schema: { categories, productImages, products, productVariants, siteSettings } });
 
 // DEV/TEST SEED DATA ONLY. The legacy catalog never tracked real per-variant
 // stock, so this is a placeholder count that lets the storefront function
@@ -149,6 +162,7 @@ async function main() {
 }
 
 main()
+  .then(() => client.end())
   .then(() => process.exit(0))
   .catch((err) => {
     console.error(err);
