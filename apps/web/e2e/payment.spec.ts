@@ -12,12 +12,66 @@ import { addFixtureProductToCart, fillShippingForm, uniquePhone } from './helper
 import { FIXTURES } from './fixtures.ts';
 
 const sql = postgres(process.env.DATABASE_URL!, { max: 1 });
+
+// Owns a dedicated product/variant, isolated from the shared fixture stock
+// pool that checkout.spec.ts and cart.spec.ts also draw from — this file
+// alone does up to 5 real checkouts per run (plus retries), which would
+// otherwise starve other specs of stock when the full suite runs together.
+// Seeded in beforeAll, torn down in afterAll; upsert-by-slug/size so a crash
+// mid-run leaves no duplicates on the next invocation.
+const PAYMENT_PRODUCT_SLUG = 'e2e-payment-test-product';
+let paymentProductId: string;
+let paymentVariantId: string;
+const createdOrderIds: number[] = [];
+
+test.beforeAll(async () => {
+  const [category] = await sql`select id from categories where slug = ${FIXTURES.categorySlug}`;
+  const [product] = await sql`
+    insert into products (slug, name, subtitle, description, price_rial, category_id, active, normalized_search_text)
+    values (${PAYMENT_PRODUCT_SLUG}, 'محصول تست پرداخت E2E', 'محصول تست', 'برای تست‌های Playwright — با seed دوباره بازسازی می‌شود، دستی ویرایش نکنید.', ${FIXTURES.priceRial}, ${category.id}, true, 'محصول تست پرداخت E2E')
+    on conflict (slug) do update set active = true, price_rial = ${FIXTURES.priceRial}
+    returning id
+  `;
+  paymentProductId = product.id;
+
+  const [existingVariant] = await sql`select id from product_variants where product_id = ${product.id} and size = 'S'`;
+  if (existingVariant) {
+    await sql`update product_variants set stock = 20, active = true where id = ${existingVariant.id}`;
+    paymentVariantId = existingVariant.id;
+  } else {
+    const [variant] = await sql`insert into product_variants (product_id, size, stock, active) values (${product.id}, 'S', 20, true) returning id`;
+    paymentVariantId = variant.id;
+  }
+});
+
+// Also clears every checkout-submit:ip:* bucket before every attempt (incl.
+// retries): actions.ts's own IP-based abuse limiter (limit 10 / 10min) keys
+// on whatever x-forwarded-for/x-real-ip resolve to for this run (usually
+// 'unknown' for local traffic, but not guaranteed) — this file alone submits
+// up to 12 real checkouts (4 tests x up to 3 attempts), tripping the app's
+// real, unmodified rate limiter mid-run. Matching the whole prefix, not one
+// hardcoded ip literal, means this can't silently miss the live key.
+// Resetting here is test-infra-only; the limiter logic itself is untouched.
+test.beforeEach(async () => {
+  await sql`delete from rate_limits where key like 'checkout-submit:%'`;
+});
+
 test.afterAll(async () => {
+  if (createdOrderIds.length) await sql`delete from orders where id = any(${createdOrderIds})`;
+  if (paymentVariantId) {
+    // Safety net: a test can fail before reaching its own createdOrderIds.push
+    // (network flake, assertion order), leaving an order that still
+    // references this variant via order_items and would block the delete
+    // below with a FK violation.
+    await sql`delete from orders where id in (select order_id from order_items where variant_id = ${paymentVariantId})`;
+    await sql`delete from product_variants where id = ${paymentVariantId}`;
+  }
+  if (paymentProductId) await sql`delete from products where id = ${paymentProductId}`;
   await sql.end();
 });
 
 async function checkoutToGateway(page: Page, opts: { phone: string; coupon?: string }): Promise<string> {
-  await addFixtureProductToCart(page);
+  await addFixtureProductToCart(page, PAYMENT_PRODUCT_SLUG);
   await page.goto('/checkout');
   await fillShippingForm(page, { phone: opts.phone, couponCode: opts.coupon });
   await page.getByRole('button', { name: 'پرداخت و ثبت سفارش' }).click();
@@ -70,6 +124,7 @@ test.describe('Zibal payment — full sandbox flow', () => {
     await expect(active).toHaveURL(/\/payment\/result\?order=\d+/);
     await expect(active.getByText('پرداخت با موفقیت انجام شد')).toBeVisible();
     const orderId = Number(new URL(active.url()).searchParams.get('order'));
+    createdOrderIds.push(orderId);
 
     const [payment] = await sql`select status, verified_at from payments where track_id = ${trackId}`;
     expect(payment.status).toBe('succeeded');
@@ -98,6 +153,7 @@ test.describe('Zibal payment — full sandbox flow', () => {
 
     await expect(active).toHaveURL(/\/payment\/failed\?order=\d+/);
     const orderId = Number(new URL(active.url()).searchParams.get('order'));
+    createdOrderIds.push(orderId);
 
     const [payment] = await sql`select status from payments where track_id = ${trackId}`;
     expect(payment.status).toBe('failed');
@@ -139,6 +195,7 @@ test.describe('Zibal payment — full sandbox flow', () => {
     const trackId = await checkoutToGateway(page, { phone });
     const active = await clickZibalOutcome(page, context, 'success');
     const orderId = Number(new URL(active.url()).searchParams.get('order'));
+    createdOrderIds.push(orderId);
 
     const [before] = await sql`select verified_at from payments where track_id = ${trackId}`;
     const reservationsBefore = await sql`select id from inventory_reservations where order_id = ${orderId} and status = 'confirmed'`;
@@ -175,6 +232,7 @@ test.describe('Zibal payment — full sandbox flow', () => {
     await expect(active.getByText('مبلغ پرداخت‌شده با مبلغ سفارش مطابقت نداشت.')).toBeVisible();
 
     const orderId = Number(new URL(active.url()).searchParams.get('order'));
+    createdOrderIds.push(orderId);
     const [payment] = await sql`select status from payments where track_id = ${trackId}`;
     expect(payment.status).toBe('failed');
 

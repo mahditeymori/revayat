@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import postgres from 'postgres';
 import { loginAsAdmin } from './helpers.ts';
 import { FIXTURES } from './fixtures.ts';
 
@@ -44,9 +45,16 @@ test('editing a product saves and persists the change', async ({ page }) => {
 
 test('transitioning an order status reflects on the order detail page', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.goto('/admin/orders');
-  const row = page.getByRole('row').filter({ hasText: FIXTURES.shippingName });
-  await row.getByRole('link').click();
+
+  // Row-text matching on shippingName is ambiguous once other specs (e.g.
+  // payment.spec.ts) create orders sharing the same fixture display name —
+  // look up the fixture order's stable id directly instead and navigate to
+  // it, same as its own #id link in the admin orders list.
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1 });
+  const [{ id: orderId }] = await sql`select id from orders where cart_token = ${FIXTURES.orderCartToken}`;
+  await sql.end();
+
+  await page.goto(`/admin/orders/${orderId}`);
   await expect(page).toHaveURL(/\/admin\/orders\/\d+$/);
 
   await expect(page.getByText('وضعیت فعلی: در انتظار')).toBeVisible();

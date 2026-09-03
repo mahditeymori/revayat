@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import postgres from 'postgres';
 import { addFixtureProductToCart, fillShippingForm } from './helpers.ts';
 import { FIXTURES } from './fixtures.ts';
 
@@ -34,4 +35,20 @@ test('valid checkout with a valid coupon redirects to the Zibal gateway', async 
   );
   await page.getByRole('button', { name: 'پرداخت و ثبت سفارش' }).click();
   await page.waitForURL(/^https:\/\/gateway\.zibal\.ir\/start\//);
+
+  // The gateway hand-off is stubbed, so the real order/reservation this just
+  // created server-side never reaches a terminal state (paid/failed) on its
+  // own — clean it up now instead of leaving it to hold shared fixture stock
+  // for the rest of the suite run. cartToken cookie name from
+  // src/app/checkout/actions.ts; orders/reservations/coupon_usages cascade
+  // on orders.id.
+  const cartToken = (await page.context().cookies()).find((c) => c.name === 'cartToken')?.value;
+  if (cartToken) {
+    const sql = postgres(process.env.DATABASE_URL!, { max: 1 });
+    try {
+      await sql`delete from orders where cart_token = ${cartToken}`;
+    } finally {
+      await sql.end();
+    }
+  }
 });

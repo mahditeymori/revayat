@@ -20,6 +20,7 @@ const baseURL = `http://localhost:${PORT}`;
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   // Fixture data (fixed cart token, fixture order) and admin login-attempt
   // counters are shared across specs — keep runs serial to avoid races.
   fullyParallel: false,

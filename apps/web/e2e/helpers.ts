@@ -18,11 +18,13 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.waitForURL('**/admin');
 }
 
-// Adds the fixture product's first available-for-sale variant to the cart
-// via the real storefront UI (no direct DB/cookie seeding) and waits for the
-// drawer's "added" confirmation.
-export async function addFixtureProductToCart(page: Page): Promise<void> {
-  await page.goto(`/products/${FIXTURES.productSlug}`);
+// Adds a product's first available-for-sale variant to the cart via the
+// real storefront UI (no direct DB/cookie seeding) and waits for the
+// drawer's "added" confirmation. Defaults to the shared fixture product;
+// pass a different slug for a spec-owned isolated product (see
+// payment.spec.ts).
+export async function addFixtureProductToCart(page: Page, slug: string = FIXTURES.productSlug): Promise<void> {
+  await page.goto(`/products/${slug}`);
   await page.getByRole('button', { name: 'افزودن به سبد خرید' }).click();
   await page.getByRole('status').filter({ hasText: 'به سبد اضافه شد' }).waitFor();
 }
