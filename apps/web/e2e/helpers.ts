@@ -26,3 +26,24 @@ export async function addFixtureProductToCart(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'افزودن به سبد خرید' }).click();
   await page.getByRole('status').filter({ hasText: 'به سبد اضافه شد' }).waitFor();
 }
+
+export async function fillShippingForm(
+  page: Page,
+  opts: { phone?: string; couponCode?: string } = {},
+): Promise<void> {
+  await page.getByLabel('نام و نام خانوادگی').fill(FIXTURES.shippingName);
+  await page.getByLabel('شماره موبایل').fill(opts.phone ?? FIXTURES.shippingPhone);
+  await page.getByLabel('استان').fill('تهران');
+  await page.getByLabel('شهر').fill('تهران');
+  await page.getByLabel('آدرس کامل').fill(FIXTURES.shippingAddress);
+  await page.getByLabel('کد پستی').fill(FIXTURES.shippingPostalCode);
+  if (opts.couponCode) await page.getByLabel('کد تخفیف (اختیاری)').fill(opts.couponCode);
+}
+
+// A fresh, validly-formatted (PHONE_RE = /^09\d{9}$/) mobile number per call —
+// keeps each payment.spec.ts test on its own customer/coupon-usage identity
+// so reruns never collide with a previous run's coupon maxUsesPerCustomer or
+// pile up orders under one shared fixture phone.
+export function uniquePhone(): string {
+  return `09${String(Date.now()).slice(-9)}`;
+}
