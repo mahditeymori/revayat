@@ -17,3 +17,8 @@ apps/web/uploads/
 .pgdata/
 .claude/
 .agents/
+
+# Playwright output
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
