@@ -1,0 +1,20 @@
+{
+  "name": "revayat-load-tests",
+  "private": true,
+  "description": "Repeatable load/stress scenarios for Phase 8 cutover prep. Isolated from apps/web's package.json/lockfile on purpose — this tooling never ships in the production image.",
+  "scripts": {
+    "seed": "node --env-file=../apps/web/.env.local seed.mjs",
+    "teardown": "node --env-file=../apps/web/.env.local teardown.mjs",
+    "verify": "node --env-file=../apps/web/.env.local verify-invariants.mjs",
+    "storefront": "artillery run storefront.yml",
+    "payment-callback": "node --env-file=../apps/web/.env.local seed-payment.mjs && artillery run payment-callback.yml",
+    "commerce": "playwright test commerce-concurrency.spec.ts --config=playwright.config.ts",
+    "auth": "playwright test auth-stress.spec.ts --config=playwright.config.ts"
+  },
+  "devDependencies": {
+    "artillery": "^2.0.0",
+    "@playwright/test": "^1.62.1",
+    "postgres": "^3.4.5",
+    "bcryptjs": "^2.4.3"
+  }
+}

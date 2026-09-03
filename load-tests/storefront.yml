@@ -1,0 +1,59 @@
+# §6.1 Storefront load test — pure GET traffic, no Server Actions, so plain
+# Artillery over HTTP is sufficient (no browser needed). Not executed this
+# session — see docs/LOAD-TESTING.md. Run with:
+#   npx artillery run storefront.yml --target http://localhost:3002
+config:
+  target: "http://localhost:3002"
+  phases:
+    - name: warm up
+      duration: 30
+      arrivalRate: 2
+    - name: ramp to peak
+      duration: 60
+      arrivalRate: 2
+      rampTo: 25
+    - name: sustained peak
+      duration: 120
+      arrivalRate: 25
+  ensure:
+    p99: 1500
+    maxErrorRate: 1
+
+scenarios:
+  - name: homepage
+    weight: 20
+    flow:
+      - get:
+          url: "/"
+
+  - name: collections list
+    weight: 15
+    flow:
+      - get:
+          url: "/collections"
+
+  - name: category page
+    weight: 20
+    flow:
+      - get:
+          url: "/collections/loadtest-category"
+
+  - name: product page
+    weight: 25
+    flow:
+      - get:
+          url: "/products/loadtest-product"
+
+  - name: search
+    weight: 15
+    flow:
+      - get:
+          url: "/search?q=تست"
+
+  - name: sitemap and robots
+    weight: 5
+    flow:
+      - get:
+          url: "/sitemap.xml"
+      - get:
+          url: "/robots.txt"

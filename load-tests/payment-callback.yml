@@ -1,0 +1,23 @@
+# §6.5 payment callback resilience — duplicate/concurrent replay of the SAME
+# trackId. Run `node seed-payment.mjs` first (creates one real sandbox
+# payment). Low, fixed volume by design: this hits the real Zibal sandbox's
+# /v1/verify once per replay, and the point is concurrency of a handful of
+# requests, not throughput. Do not raise arrivalCount without re-reading
+# DEPLOY.md's Zibal section first. Not executed this session.
+#   node seed-payment.mjs && npx artillery run payment-callback.yml --target http://localhost:3002
+config:
+  target: "http://localhost:3002"
+  processor: "./payment-callback-processor.mjs"
+  phases:
+    - name: concurrent replay burst
+      duration: 5
+      arrivalCount: 15
+
+scenarios:
+  - name: replay the same successful callback concurrently
+    flow:
+      - function: "setTrackId"
+      - get:
+          url: "/payment/callback?trackId={{ trackId }}&success=1&status=1"
+          expect:
+            - statusCode: [200, 302, 303]
