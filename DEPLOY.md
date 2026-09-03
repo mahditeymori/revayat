@@ -26,9 +26,14 @@ $EDITOR .env          # real values — this file must never be committed
 | Variable | Notes |
 |---|---|
 | `NEXT_PUBLIC_SITE_URL` | `https://revayat.shop` — wrong value breaks SEO and canonical URLs |
-| `ADMIN_PASSWORD` | long random string |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | provisions the `db` compose service; `web`'s `DATABASE_URL` is built from these automatically in `docker-compose.yml` |
+| `ADMIN_SESSION_SECRET` | signs admin session tokens — long random string, e.g. `openssl rand -base64 32` |
+| `ZIBAL_MERCHANT` | payment gateway merchant id — `deploy.sh` refuses to deploy without it (see Payments section) |
 | `NEXT_PUBLIC_ENAMAD_CODE` | optional |
 | `CERT_DOMAIN` | defaults to `revayat.shop` |
+| `BACKUP_RETENTION_DAYS` | defaults to `14` — pruning window for the `backup` service's scheduled `pg_dump` |
+
+Full list with placeholders: `.env.example` (repo root).
 
 Log in to GHCR so the server can pull the private image:
 
@@ -50,6 +55,47 @@ docker compose restart nginx
 
 Renewal is automatic from then on — the certbot container renews every 12h and
 nginx reloads on the same interval.
+
+### Database migrations and first-time catalog import
+
+Schema migrations run automatically, every boot, before the app starts
+(`apps/web/docker-entrypoint.sh` → `node scripts/migrate.mjs`). Drizzle tracks
+what's applied in its own table, so this is idempotent — nothing to do here.
+
+The legacy flat-JSON catalog (`apps/web/data/products.json`,
+`apps/web/data/settings.json`) is **not** migrated automatically — that only
+happens once, on purpose, via `npm run migrate:legacy-json`. The production
+image doesn't ship the script's source deps (by design — see
+`apps/web/Dockerfile`'s runner stage, which only carries `migrate.mjs`), so run
+it from the full repo checkout on the server, attached to the compose
+network, pointed at the `db` service by name:
+
+```bash
+cd /srv/revayat/apps/web
+npm ci
+DATABASE_URL="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432/$POSTGRES_DB" \
+  docker compose -f ../../docker-compose.yml run --rm --no-deps \
+  -v "$PWD":/app -w /app node:22-alpine \
+  sh -c "npm ci && npm run migrate:legacy-json"
+```
+
+Simpler in practice: temporarily add `ports: ['127.0.0.1:5432:5432']` to the
+`db` service (or reuse `docker-compose.override.yml` locally against a
+production DB dump) and run `npm run migrate:legacy-json` directly from the
+checkout with `DATABASE_URL=postgresql://…@localhost:5432/…` in `.env.local`.
+Revert the port mapping afterward — `db` is not meant to be reachable from
+outside the compose network in production.
+
+It's an upsert on category slug and an existence-check-then-skip on product
+slug — safe to re-run, and re-running after a product already exists will
+**not** update that product's data or variants. Migrated stock is a
+placeholder (`LEGACY_MIGRATION_DEFAULT_STOCK`, default 20 per variant, not a
+real inventory count) — correct real per-variant stock via
+**مدیریت → موجودی** before taking real orders.
+
+If this is a brand-new database, also bootstrap the first admin account —
+`npm run db:seed-admin` (same run pattern as above), refuses to run if any
+admin row already exists.
 
 ## The everyday checklist
 
@@ -115,57 +161,57 @@ a manual approval gate before deploys.
 
 ## Data
 
-Everything mutable lives in the `revayat_data` Docker volume:
-
-```
-/app/data/products.json     catalog (admin-editable)
-/app/data/settings.json     hero text, announcement, footer
-/app/data/orders.json       orders (incl. payment state per order)
-/app/data/payments.json     payment attempts — trackId, amount, bank refs
-/app/data/counters.json     monotonic order-id counter (never goes down)
-/app/data/uploads/          uploaded product images
-```
-
-Seed copies ship in the image at `/app/data-seed` and are copied across **only
-when a file is missing** (`apps/web/docker-entrypoint.sh`). An existing file is
-never overwritten, so deploying cannot clobber admin edits.
-
-> This is why admin changes used to need a restart: the old Dockerfile copied
-> seed data to `/app/data`, which the volume then mounted over. The image copy
-> was shadowed and permanently stale while the app wrote to the volume.
+Catalog, orders, payments, coupons, admins — everything transactional lives
+in Postgres, in the `revayat_pgdata` Docker volume (`db` compose service).
+Admin-uploaded product images live in the `revayat_uploads` volume
+(`MEDIA_UPLOADS_DIR`, mounted into `web`). Nothing is baked into the image;
+both volumes survive every deploy untouched — `deploy.sh` only replaces the
+`web` container.
 
 ### Backup
 
+Automatic: the `backup` compose service runs `pg_dump -Fc` on boot and then
+every `BACKUP_INTERVAL_HOURS` (default 24), writing to the `revayat_backups`
+volume and pruning dumps older than `BACKUP_RETENTION_DAYS` (default 14) —
+see `pg-backup-entrypoint.sh`. No cron setup needed; it's a long-running
+container.
+
+Copy a dump off-box before trusting it as your only copy — a backup on the
+same disk survives a bad deploy but not a dead VM:
+
 ```bash
-docker run --rm -v revayat_revayat_data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/revayat-data-$(date +%F).tar.gz -C /data .
+docker compose cp backup:/backups/. ./backups-offbox/
 ```
 
-Restore:
+Manual, one-off dump:
 
 ```bash
-docker run --rm -v revayat_revayat_data:/data -v "$PWD":/backup alpine \
-  tar xzf /backup/revayat-data-2026-08-18.tar.gz -C /data
-docker compose restart web
+docker compose exec backup pg_dump -Fc -f /backups/manual-$(date -u +%Y%m%dT%H%M%SZ).dump
 ```
 
-Back up before any deploy that changes the shape of the JSON files.
+### Restore
 
-Nightly, at 03:12 (`crontab -e` as the deploy user) — the odd minute keeps it off
-the hour, and `find -delete` keeps 30 days:
+Destructive — this replaces the live database. Confirm you're restoring the
+right dump and that you intend to discard any writes made after it, before
+running this on a host serving real traffic.
 
-```cron
-12 3 * * * cd /srv/revayat && docker run --rm -v revayat_revayat_data:/data -v /srv/backups:/backup alpine tar czf /backup/revayat-data-$(date +\%F).tar.gz -C /data . && find /srv/backups -name 'revayat-data-*.tar.gz' -mtime +30 -delete
+```bash
+docker compose stop web                     # stop writes first
+docker compose exec -T db pg_restore --clean --if-exists \
+  -U "$POSTGRES_USER" -d "$POSTGRES_DB" < /path/to/revayat-<timestamp>.dump
+docker compose start web
 ```
 
-A backup on the same disk survives a bad deploy but not a dead VM. Copy
-`/srv/backups` off-box (rsync/object storage) if the orders matter.
+There is no automated down-migration path — Drizzle only applies forward
+migrations. Reverting a bad schema change means restoring the most recent
+pre-change `pg_dump`, which loses any data written after that dump.
 
 ## Where secrets live
 
 | Secret | Lives in | Never in |
 |---|---|---|
-| `ADMIN_PASSWORD` | server `.env`, laptop `.env` | Git — `.gitignore` blocks `.env` |
+| `ADMIN_SESSION_SECRET` | server `.env`, laptop `.env.local` | Git — `.gitignore` blocks `.env`/`.env.local` |
+| `POSTGRES_PASSWORD` | server `.env` | Git |
 | `ZIBAL_MERCHANT` | server `.env`, laptop `.env.local` | Git, **and the browser** — never rename it `NEXT_PUBLIC_*` |
 | `SSH_KEY`, `SSH_HOST` | GitHub Actions secrets | the repo |
 | GHCR token | `docker login` on the server | the repo |
@@ -173,19 +219,19 @@ A backup on the same disk survives a bad deploy but not a dead VM. Copy
 `.env.example` lists every variable with placeholder values and **is** committed;
 `.env` holds the real ones and is not. `git check-ignore -v .env` confirms it.
 
-### Rotating the admin password
-
-The old password is in Git history. History is not being rewritten (private repo,
-your call), so rotate the value instead — that makes the committed one worthless:
+### Rotating the admin session secret
 
 ```bash
-openssl rand -base64 24            # on the server
-$EDITOR /srv/revayat/.env          # set ADMIN_PASSWORD
+openssl rand -base64 32            # on the server
+$EDITOR /srv/revayat/.env          # set ADMIN_SESSION_SECRET
 docker compose up -d --force-recreate web
 ```
 
-Do the same in your laptop `.env`. Existing admin sessions are signed with the
-password, so they are invalidated by the change — log in again.
+Do the same in your laptop `.env.local`. Existing admin sessions are signed
+with the secret, so they are invalidated by the change — log in again.
+Admin *passwords* are per-account, hashed rows in the `admins` table (see
+`apps/web/scripts/seed-admin.ts`, `/admin/team`) — nothing to rotate here for
+those; reset one from **مدیریت → تیم** instead.
 
 ## Payments (Zibal)
 
@@ -339,7 +385,8 @@ if `git ls-files` ever lists it again, `git rm --cached` it, because
 `.gitignore` does not apply to files already tracked):
 
 ```
-ADMIN_PASSWORD=<anything>
+DATABASE_URL=postgresql://revayat:revayat@localhost:5432/revayat
+ADMIN_SESSION_SECRET=<anything>
 ZIBAL_MERCHANT=zibal          # sandbox: full flow, no real money
 ```
 
