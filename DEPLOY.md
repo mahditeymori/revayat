@@ -143,6 +143,26 @@ tag currently deployed is recorded in `.deploy-image`.
 
 Rollback is a retag and restart — no rebuild. Data is untouched.
 
+### Deploy checklist
+
+Before:
+
+```bash
+git rev-parse HEAD                                              # confirm the SHA you expect
+docker manifest inspect ghcr.io/mahditeymori/revayat-web:<sha>   # confirm GHCR has that tag
+```
+
+After, on the server:
+
+```bash
+docker inspect revayat-web-1 --format '{{.Config.Image}}'   # container is running the expected SHA
+docker compose -f docker-compose.yml ps                     # all services healthy
+curl -I https://revayat.shop                                # homepage, expect 200
+curl -I https://revayat.shop/admin                           # admin route reachable
+```
+
+If any step fails, `./rollback.sh` before investigating further — restore service first, debug after.
+
 ## GitHub secrets
 
 Settings → Secrets and variables → Actions:
