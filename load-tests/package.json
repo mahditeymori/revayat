@@ -12,9 +12,9 @@
     "auth": "playwright test auth-stress.spec.ts --config=playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "artillery": "^2.0.0",
-    "@playwright/test": "^1.62.1",
-    "postgres": "^3.4.5",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "postgres": "^3.4.5"
   }
 }

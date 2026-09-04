@@ -47,7 +47,7 @@ test.beforeAll(async () => {
 
   await sql`
     insert into coupons (code, type, value, max_uses_total, max_uses_per_customer, min_subtotal_rial, active)
-    values (${SCARCE_COUPON}, 'percent', 5, ${COUPON_MAX_USES}, 1, 0, true)
+    values (${SCARCE_COUPON}, 'percentage', 5, ${COUPON_MAX_USES}, 1, 0, true)
     on conflict (code) do update set active = true, max_uses_total = ${COUPON_MAX_USES}, max_uses_per_customer = 1
   `;
 });

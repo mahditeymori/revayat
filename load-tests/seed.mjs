@@ -33,7 +33,7 @@ const variant = existingVariant
 
 await sql`
   insert into coupons (code, type, value, max_uses_total, max_uses_per_customer, min_subtotal_rial, active)
-  values (${COUPON_CODE}, 'percent', 10, 100000, 1000, 0, true)
+  values (${COUPON_CODE}, 'percentage', 10, 100000, 1000, 0, true)
   on conflict (code) do update set active = true, max_uses_total = 100000, max_uses_per_customer = 1000
 `;
 
