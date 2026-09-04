@@ -113,7 +113,19 @@ commit `401560b`/`cb10f00` is burned):
 | `ar-mehdi-privatekey.pem` | Revoke/remove from every server or service it was ever added to; issue a new keypair — see above |
 | Seeded admin password (`npm run db:seed-admin`'s default) | Force a real password reset immediately after first production login, before any other admin work |
 
-**Secret-scanning check (new this phase)**: no scanning existed before. Added:
+**Deployment env update procedure per secret class (Phase 8.2)** — how each
+rotated value actually reaches the running production deployment, not just
+what to generate. No values below; commands only.
+
+| Secret | Update procedure | Restart scope |
+|---|---|---|
+| `ADMIN_SESSION_SECRET` | `openssl rand -base64 32` on the server → `$EDITOR /srv/revayat/.env` → set var. Documented in `DEPLOY.md` "Rotating the admin session secret". | `docker compose up -d --force-recreate web`. All existing admin sessions invalidated (expected) — every admin must log in again. |
+| `ZIBAL_MERCHANT` | Get real merchant id from the Zibal dashboard → `$EDITOR /srv/revayat/.env` → set var. Documented in `DEPLOY.md` "Configuring the merchant". | `./deploy.sh` (redeploys current image pin, which reads the new `.env` value at container start). |
+| `POSTGRES_PASSWORD` | Generate fresh value → `$EDITOR /srv/revayat/.env` → set var **and** apply it inside the running DB first (`docker compose exec db psql -U <user> -c "ALTER USER <user> WITH PASSWORD '<new>';"`) so the old value stops working atomically with the `.env` change — not documented in `DEPLOY.md` yet, add before go-live. | `docker compose up -d --force-recreate db web` (both — `web`'s `DATABASE_URL` is built from this var at container start, per §3 table above). Expect a brief connection gap while `db` restarts. |
+| `ar-mehdi-privatekey.pem` | Not an env var — a file. Revoke/remove from every server (`authorized_keys`), service, or TLS config it was ever installed to; issue and install a fresh keypair in its place. No `.env` entry exists for this — it was never meant to be in the repo at all (see §3 audit above). | Per-service — SSH `authorized_keys` takes effect immediately on removal; any TLS/cert usage needs a reload of the consuming service. |
+| Seeded admin password (`npm run db:seed-admin` default) | Log in once with the seeded credentials, then reset immediately via **مدیریت → تیم** (per-account hashed row in `admins`, not an env var — see `DEPLOY.md` "Rotating the admin session secret"). | None — takes effect on next login attempt, no container restart needed. |
+
+
 - CI: `.github/workflows/deploy.yml` `build` job now runs
   [`gitleaks/gitleaks-action@v2`](https://github.com/gitleaks/gitleaks-action)
   (checkout widened to `fetch-depth: 0` so it can see full history) — fails the
@@ -228,7 +240,23 @@ run separately on request). See §9's LOAD TEST column.
   No data loss, no corruption, no missing FK, no missing migration record.
   Backup path is verified end-to-end.
 
-## 8. RBAC browser-level coverage — Phase 8.1 §4
+## 8. RBAC browser-level coverage — Phase 8.1 §4, fixed Phase 8.2 §1
+
+**Status-code gap closed, Phase 8.2**: `src/proxy.ts` (Next 16 Proxy, `matcher:
+'/admin/:path*'`) now runs the same session+permission check as
+`requireAdmin()`/`requirePermission()` — a real DB session lookup via
+`getSessionByToken` (exported from `lib/admin/session.ts`, shared with the
+page-level check, not duplicated logic) and a route→permission map
+(`permissionForPath` in `lib/admin/rbac.ts`) — before any route starts
+streaming, and returns a real `404` via `NextResponse.rewrite` to a
+non-existent path. `/admin/login` and `/admin/logout` stay public. Page-level
+`requireAdmin()`/`requirePermission()` calls are untouched — this is additive
+defense-in-depth, not a replacement; server-side authorization is unchanged
+per the Phase 8.2 requirement. `rbac.spec.ts` (unchanged since Phase 8.1,
+asserting real `404` throughout): **5/5 pass**, up from 1/5. Verified via
+`npm run typecheck`, `npm run build` (proxy compiles and bundles its
+`'server-only'`-tagged DB import correctly), and two consecutive full
+`npx playwright test` runs (26/26 both times).
 
 New file `apps/web/e2e/rbac.spec.ts`, 5 tests, self-contained fixture admins
 (`rbac-editor@`, `rbac-support@`, `rbac-disabled@revayat.test`), wired into
@@ -273,23 +301,18 @@ bypassing the browser's rendered DOM to see exactly what the server sent):
   trigger paths (missing permission on two different roles, admin disabled
   mid-session, session revoked mid-use), each via fresh diagnostic
   instrumentation, each reverted after confirming.
-- **Not fixed this phase** — same "test tooling only, no application
-  architecture changes" boundary as the `unstable_cache` finding in §4.
-  Next's own docs recommend performing this class of check in middleware
-  (Next 16: `proxy`) instead of deep in a page component, since middleware
-  runs before any response streaming begins and can set a real status code.
-  That is a genuine architecture change (moving session/permission checks
-  out of page components into `src/proxy.ts` or equivalent) — sized for its
-  own reviewed change, not a drive-by fix inside a test-writing phase.
-  **Recommendation before go-live**: move the `requireAdmin()`/
-  `requirePermission()` gate into middleware/proxy for the `/admin/*`
-  route group, keeping the `notFound()`-not-redirect behavior for content
-  but gaining a real `404` status.
+- **Not fixed in Phase 8.1** — was scoped as "test tooling only, no
+  application architecture changes" for that phase; the recommended fix
+  (moving the check into `proxy`) was a genuine architecture change, sized
+  for its own reviewed phase.
+- **Fixed Phase 8.2 §1** — see the status box above this section. The gate
+  now runs in `src/proxy.ts`, ahead of streaming, so the status code matches
+  the anti-enumeration design intent in all 5 tested cases.
 
 Test file left exactly as originally designed — asserting the real `404`
-status the anti-enumeration design intends, not weakened to match the
-current, imperfect behavior. It will start passing once the above is fixed;
-until then it correctly documents the gap on every run instead of hiding it.
+status the anti-enumeration design intends. It now passes 5/5 (Phase 8.2),
+having correctly documented the gap on every run beforehand instead of
+hiding it.
 
 ## 9. Final verification matrix
 
@@ -303,7 +326,7 @@ apply to that layer.
 | Search | VERIFIED | VERIFIED | VERIFIED | N/A | VERIFIED (covered by `storefront.yml`) |
 | Variants | VERIFIED | VERIFIED | VERIFIED | N/A | NOT RUN |
 | Cart | VERIFIED | VERIFIED | VERIFIED (`cart.spec.ts`) | N/A | NOT RUN |
-| Checkout | VERIFIED | VERIFIED | VERIFIED (`checkout.spec.ts`) | N/A | **Content VERIFIED (invariants clean), non-blocking finding** — see §6.2/6.3, `unstable_cache` stale-render gap |
+| Checkout | VERIFIED | VERIFIED | VERIFIED (`checkout.spec.ts`) | N/A | VERIFIED (invariants clean, §6.2/6.3; `unstable_cache` stale-render gap found this pass **resolved Phase 8.2 §3** — see §10 item 5) |
 | Inventory / reservations | VERIFIED | VERIFIED | VERIFIED | N/A | VERIFIED (`commerce-concurrency.spec.ts`, `verify-invariants.mjs` clean under 12-buyer race for 5 units — no oversell) |
 | Coupons | VERIFIED | VERIFIED | VERIFIED | N/A | VERIFIED (same run, no `max_uses_total` overage) |
 | Orders | VERIFIED | VERIFIED | VERIFIED | N/A | NOT RUN |
@@ -311,7 +334,7 @@ apply to that layer.
 | Admin | VERIFIED | VERIFIED | VERIFIED (`admin.spec.ts`) | N/A | VERIFIED (`auth-stress.spec.ts`, §6.4: 4/4 pass) |
 | Uploads | VERIFIED | N/A | Not covered by current e2e specs — add before go-live if uploads changed recently | N/A | NOT RUN |
 | SEO | N/A | N/A | Manually reviewed §4 this phase, not automated | N/A | N/A |
-| Security (rate limiting, RBAC, session) | VERIFIED (`rate-limit` tests, `src/lib/admin/rbac.test.ts`) | VERIFIED | **Content-blocking VERIFIED, status-code NOT VERIFIED** — `rbac.spec.ts` (Phase 8.1 §4, new) confirms `requireAdmin()`/`requirePermission()` correctly withhold real page content in every case tested, but a real Next.js-16 streaming gap means the HTTP status stays `200` instead of `404` — see §8 | N/A | VERIFIED (auth stress, §6.4 — rate limit/lockout/enumeration-resistance) |
+| Security (rate limiting, RBAC, session) | VERIFIED (`rate-limit` tests, `src/lib/admin/rbac.test.ts`) | VERIFIED | **VERIFIED (Phase 8.2)** — `rbac.spec.ts` 5/5 pass: both content-blocking and HTTP status (`404`, via `src/proxy.ts`) confirmed — see §8 | N/A | VERIFIED (auth stress, §6.4 — rate limit/lockout/enumeration-resistance) |
 | Backups | N/A | Automated dump confirmed running | N/A | N/A | VERIFIED — **restore tested, Phase 8.1, see §7** |
 
 ## 10. Remaining blockers before go-live
@@ -323,23 +346,30 @@ apply to that layer.
    Playwright scenarios executed against a disposable staging stack, see
    §6/§9. `payment-callback.yml` still not run by design (§6.5) — not a
    blocker, can be run separately on request.
-3. **RBAC status-code gap (§8, new this phase)**: real content-leak
-   protection confirmed working (VERIFIED), but `notFound()` called from a
-   protected admin page returns HTTP `200` instead of `404` due to Next.js
-   16's streaming-status-commit behavior. Recommend moving the permission
-   gate into middleware/proxy before go-live so the status code matches the
-   anti-enumeration design intent — not a data-exposure risk as-is, but a
-   real, currently-failing test and a real gap from the stated design goal.
+3. ~~RBAC status-code gap.~~ **Resolved, Phase 8.2 §1** — `src/proxy.ts` now
+   gates every `/admin/*` request with a real 404, ahead of streaming. See §8.
 4. **No down-migration path** — accepted as-is (industry-normal for Drizzle),
    but the *first* real production schema change should be rehearsed
    restore-from-backup once, per item 1, before it's needed for real.
-5. Two known, non-blocking application gaps carried from §4 (stale
-   `/faq`/`/support` SEO metadata, permanent `unstable_cache` on product
-   queries) — recommend follow-up tickets, not a go-live blocker.
+5. ~~Permanent `unstable_cache` on product queries.~~ **Resolved, Phase 8.2
+   §3** — reservation-lifecycle writes (`createOrder`, `ensureHold`, and the
+   failure/cancel branch of `applyDecision`) now call
+   `revalidateTag('products', {expire: 0})` immediately after their owning
+   transaction commits, so checkout/payment state changes are never served
+   stale. `unstable_cache`'s three `products.ts` entries also gained a
+   `revalidate: 30` TTL backstop, covering the one writer that cannot call
+   any Next invalidation API (`scripts/release-expired-reservations.ts`,
+   a standalone process outside Next's request scope). Admin-driven price
+   and stock edits were already correctly invalidated pre-Phase-8.2 via
+   `updateTag('products')` in `lib/admin/products.ts`/`lib/admin/inventory.ts`
+   — unchanged. Remaining known non-blocking gap: stale `/faq`/`/support` SEO
+   metadata (§4) — recommend a follow-up ticket, not a go-live blocker.
 6. Every secret that ever touched the two 2026-08-15 commits (§3) should be
    rotated to a fresh value before the production `.env` is written — including
    the `ar-mehdi-privatekey.pem` private key found in `401560b` by this phase's
-   gitleaks scan (revoke/reissue, not just a value swap — see §3).
+   gitleaks scan (revoke/reissue, not just a value swap). Phase 8.2 §2 added
+   the per-secret deployment update procedure (commands + restart scope) —
+   see §3.
 
-Item 3 needs an application code change (middleware/proxy) to fully close;
-everything else is operational/verification.
+All items above are now operational/verification only — no known application
+code changes remain outstanding from Phases 8.1–8.2.
