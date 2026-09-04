@@ -14,7 +14,7 @@ export function Hero({
 }) {
   if (imageUrl) {
     return (
-      <section className="relative aspect-[16/9] w-full overflow-hidden sm:aspect-[21/9]">
+      <section className="relative aspect-[4/5] w-full overflow-hidden sm:aspect-[16/9] lg:aspect-[21/9]">
         {/* eslint-disable-next-line @next/next/no-img-element -- admin-uploaded, arbitrary-origin hero image */}
         <img
           src={imageUrl}
@@ -22,13 +22,13 @@ export function Hero({
           fetchPriority="high"
           className="h-full w-full object-cover"
         />
-        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-ink/80 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 p-6 sm:p-12">
-          <h1 className="wordmark text-3xl text-cream sm:text-4xl">{title}</h1>
-          <p className="mt-4 max-w-xl text-cream/80">{subtitle}</p>
+        <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-ink/85 via-ink/20 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-6 sm:p-14">
+          <h1 className="wordmark text-4xl text-cream sm:text-5xl lg:text-6xl">{title}</h1>
+          <p className="mt-5 max-w-xl text-base text-cream/85 sm:text-lg">{subtitle}</p>
           <Link
             href="/collections"
-            className="mt-8 inline-block border border-cream px-8 py-3 text-sm text-cream hover:bg-cream hover:text-ink"
+            className="mt-9 inline-block border border-cream px-9 py-3.5 text-sm tracking-wide text-cream transition-colors hover:bg-cream hover:text-ink"
           >
             مشاهده مجموعه‌ها
           </Link>
@@ -38,7 +38,7 @@ export function Hero({
   }
 
   return (
-    <section className="relative overflow-hidden border-b border-cream-200 bg-cream-50 px-4 py-20 text-center sm:py-28">
+    <section className="relative overflow-hidden border-b border-cream-200 bg-cream-50 px-4 py-24 text-center sm:py-32">
       <p
         aria-hidden
         className="wordmark pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 select-none text-[18vw] leading-none text-ink/5"
@@ -46,11 +46,11 @@ export function Hero({
         {site.name}
       </p>
       <div className="relative mx-auto max-w-2xl">
-        <h1 className="wordmark text-3xl text-ink sm:text-4xl">{title}</h1>
-        <p className="mx-auto mt-4 max-w-xl text-ink-60">{subtitle}</p>
+        <h1 className="wordmark text-4xl text-ink sm:text-5xl lg:text-6xl">{title}</h1>
+        <p className="mx-auto mt-5 max-w-xl text-base text-ink-60 sm:text-lg">{subtitle}</p>
         <Link
           href="/collections"
-          className="mt-8 inline-block border border-ink px-8 py-3 text-sm hover:bg-ink hover:text-cream"
+          className="mt-9 inline-block border border-ink px-9 py-3.5 text-sm tracking-wide transition-colors hover:bg-ink hover:text-cream"
         >
           مشاهده مجموعه‌ها
         </Link>

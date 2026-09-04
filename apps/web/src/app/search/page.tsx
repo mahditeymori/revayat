@@ -26,9 +26,9 @@ export default async function SearchPage({
           type="search"
           defaultValue={query}
           placeholder="مثلاً دماوند…"
-          className="flex-1 border border-cream-200 bg-transparent px-4 py-3 text-sm focus:border-ink focus:outline-none"
+          className="min-h-11 flex-1 border border-cream-200 bg-transparent px-4 py-3 text-base focus:border-ink focus:outline-none sm:text-sm"
         />
-        <button type="submit" className="bg-ink px-6 py-3 text-sm text-cream hover:bg-sand-dark">
+        <button type="submit" className="min-h-11 bg-ink px-6 py-3 text-sm text-cream hover:bg-sand-dark">
           جستجو
         </button>
       </form>

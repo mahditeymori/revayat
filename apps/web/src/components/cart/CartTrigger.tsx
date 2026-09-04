@@ -17,7 +17,7 @@ export function CartTrigger() {
         e.preventDefault();
         open();
       }}
-      className="relative flex items-center hover:opacity-75"
+      className="group relative flex items-center hover:opacity-75"
       aria-label={`سبد خرید${cart.itemCount > 0 ? ` (${toPersianDigits(cart.itemCount)} کالا)` : ''}`}
     >
       <CartIcon />

@@ -87,21 +87,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
 function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b border-cream-200 bg-cream/85 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4 sm:px-6">
-        <Link href="/" className="wordmark text-lg text-ink sm:text-xl" aria-label={site.name}>
+    <header className="sticky top-0 z-40 border-b border-cream-200 bg-cream/90 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-5 sm:px-6">
+        <Link href="/" className="wordmark text-xl tracking-wide text-ink sm:text-2xl" aria-label={site.name}>
           {site.name}
         </Link>
-        <nav aria-label="اصلی" className="hidden gap-8 text-sm md:flex">
+        <nav aria-label="اصلی" className="hidden gap-9 text-sm md:flex">
           {nav.map((item) => (
-            <Link key={item.href} href={item.href} className="transition-colors hover:text-sand-dark">
+            <Link
+              key={item.href}
+              href={item.href}
+              className="border-b border-transparent pb-1 transition-colors hover:border-sand-dark hover:text-sand-dark"
+            >
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className="flex items-center gap-5 text-sm">
-          <Link href="/search" className="hover:text-sand-dark">
-            جستجو
+        <div className="flex items-center gap-6 text-sm">
+          <Link href="/search" aria-label="جستجو" className="inline-flex hover:text-sand-dark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+            </svg>
           </Link>
           <CartTrigger />
         </div>
@@ -119,15 +126,15 @@ function Footer({
 }) {
   return (
     <footer className="mt-24 border-t border-cream-200 bg-cream-50">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-3">
+      <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_auto]">
         <div>
-          <p className="wordmark text-base">{site.name}</p>
+          <p className="wordmark text-lg tracking-wide">{site.name}</p>
           <p className="mt-4 max-w-sm text-sm leading-8 text-ink-60">{footerText || site.description}</p>
         </div>
 
         <nav aria-label="فوتر" className="text-sm">
-          <p className="mb-4 font-medium">خرید</p>
-          <ul className="space-y-3 text-ink-60">
+          <p className="mb-4 font-medium uppercase tracking-wider text-ink-60">خرید</p>
+          <ul className="space-y-3.5 text-ink-60">
             {nav.map((item) => (
               <li key={item.href}>
                 <Link href={item.href} className="hover:text-ink">
@@ -139,8 +146,8 @@ function Footer({
         </nav>
 
         <nav aria-label="درباره" className="text-sm">
-          <p className="mb-4 font-medium">درباره ما</p>
-          <ul className="space-y-3 text-ink-60">
+          <p className="mb-4 font-medium uppercase tracking-wider text-ink-60">درباره ما</p>
+          <ul className="space-y-3.5 text-ink-60">
             {supportPages.map((p) => (
               <li key={p.slug}>
                 <Link href={`/support/${p.slug}`} className="hover:text-ink">
@@ -168,7 +175,7 @@ function Footer({
 
         {site.enamadCode && (
           <div className="text-sm">
-            <p className="mb-4 font-medium">اعتماد</p>
+            <p className="mb-4 font-medium uppercase tracking-wider text-ink-60">اعتماد</p>
             <a
               referrerPolicy="origin"
               target="_blank"

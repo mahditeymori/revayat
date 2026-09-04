@@ -7,6 +7,7 @@ import { HomeHeader } from '@/components/home/HomeHeader';
 import { Hero } from '@/components/home/Hero';
 import { CategoryRail } from '@/components/home/CategoryRail';
 import { FeaturedProducts } from '@/components/home/FeaturedProducts';
+import { BrandStory } from '@/components/home/BrandStory';
 
 export default async function HomePage() {
   const [featured, categories, settings] = await Promise.all([
@@ -25,6 +26,7 @@ export default async function HomePage() {
       />
 
       {categories.length > 0 && <CategoryRail categories={categories} />}
+      <BrandStory image={categories.find((c) => c.image)?.image ?? featured[0]?.images[0] ?? null} />
       {featured.length > 0 && <FeaturedProducts products={featured} />}
 
       {featured.length === 0 && categories.length === 0 && (

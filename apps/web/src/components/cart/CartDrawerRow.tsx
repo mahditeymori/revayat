@@ -46,7 +46,7 @@ export function CartDrawerRow({ item }: { item: CartItem }) {
               type="button"
               onClick={() => setQuantity(item.id, item.quantity - 1)}
               aria-label="کاهش تعداد"
-              className="h-7 w-7 text-sm text-ink-60 hover:text-ink"
+              className="min-h-11 min-w-11 text-sm text-ink-60 hover:text-ink sm:h-7 sm:min-h-0 sm:w-7 sm:min-w-0"
             >
               −
             </button>
@@ -56,7 +56,7 @@ export function CartDrawerRow({ item }: { item: CartItem }) {
               onClick={() => setQuantity(item.id, item.quantity + 1)}
               disabled={atStockLimit}
               aria-label="افزایش تعداد"
-              className="h-7 w-7 text-sm text-ink-60 hover:text-ink disabled:opacity-40"
+              className="min-h-11 min-w-11 text-sm text-ink-60 hover:text-ink disabled:opacity-40 sm:h-7 sm:min-h-0 sm:w-7 sm:min-w-0"
             >
               +
             </button>
@@ -64,7 +64,7 @@ export function CartDrawerRow({ item }: { item: CartItem }) {
           <button
             type="button"
             onClick={() => remove(item.id)}
-            className="text-xs text-ink-60 underline hover:text-clay"
+            className="py-2 text-sm text-ink-60 underline hover:text-clay"
           >
             حذف
           </button>

@@ -57,7 +57,7 @@ export default async function CheckoutPage({ searchParams }: Props) {
       )}
 
       <form action={submitCheckoutAction} className="mt-8 grid gap-10 lg:grid-cols-[1fr_360px]">
-        <div className="space-y-5">
+        <div className="space-y-6">
           <div>
             <label htmlFor="name" className="block text-sm text-ink-60">
               نام و نام خانوادگی
@@ -67,7 +67,7 @@ export default async function CheckoutPage({ searchParams }: Props) {
               name="name"
               required
               minLength={3}
-              className="mt-1.5 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-ink"
+              className="mt-1.5 min-h-11 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-base outline-none focus:border-ink sm:text-sm"
             />
           </div>
 
@@ -83,7 +83,7 @@ export default async function CheckoutPage({ searchParams }: Props) {
               pattern="09[0-9]{9}"
               placeholder="09123456789"
               dir="ltr"
-              className="mt-1.5 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-ink"
+              className="mt-1.5 min-h-11 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-base outline-none focus:border-ink sm:text-sm"
             />
           </div>
 
@@ -96,7 +96,7 @@ export default async function CheckoutPage({ searchParams }: Props) {
                 id="state"
                 name="state"
                 required
-                className="mt-1.5 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-ink"
+                className="mt-1.5 min-h-11 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-base outline-none focus:border-ink sm:text-sm"
               />
             </div>
             <div>
@@ -107,7 +107,7 @@ export default async function CheckoutPage({ searchParams }: Props) {
                 id="city"
                 name="city"
                 required
-                className="mt-1.5 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-ink"
+                className="mt-1.5 min-h-11 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-base outline-none focus:border-ink sm:text-sm"
               />
             </div>
           </div>
@@ -121,7 +121,7 @@ export default async function CheckoutPage({ searchParams }: Props) {
               name="address"
               required
               rows={3}
-              className="mt-1.5 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-ink"
+              className="mt-1.5 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-base outline-none focus:border-ink sm:text-sm"
             />
           </div>
 
@@ -136,7 +136,7 @@ export default async function CheckoutPage({ searchParams }: Props) {
               pattern="[0-9]{10}"
               inputMode="numeric"
               dir="ltr"
-              className="mt-1.5 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-ink"
+              className="mt-1.5 min-h-11 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-base outline-none focus:border-ink sm:text-sm"
             />
           </div>
 
@@ -148,7 +148,7 @@ export default async function CheckoutPage({ searchParams }: Props) {
               id="couponCode"
               name="couponCode"
               dir="ltr"
-              className="mt-1.5 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-ink"
+              className="mt-1.5 min-h-11 w-full border border-cream-200 bg-transparent px-3 py-2.5 text-base outline-none focus:border-ink sm:text-sm"
             />
           </div>
         </div>

@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { discountPercent, formatToman } from '@/lib/format';
 import { site } from '@/lib/site';
+import { QuickAdd } from '@/components/QuickAdd';
 import type { Product } from '@/lib/commerce/types';
 
 export function isOnSale(product: Product): boolean {
@@ -25,7 +26,8 @@ export function ProductCard({ product, priority = false }: { product: Product; p
   const [first, second] = product.images;
 
   return (
-    <Link href={`/products/${product.slug}`} className="group block">
+    <div className="group relative">
+      <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={product.name} />
       <div className="relative aspect-[3/4] overflow-hidden bg-cream-200">
         {first && (
           <Image
@@ -57,6 +59,11 @@ export function ProductCard({ product, priority = false }: { product: Product; p
           </span>
         )}
       </div>
+      {inStock && (
+        <div className="relative z-10 -mt-11 sm:mt-0">
+          <QuickAdd product={product} />
+        </div>
+      )}
       <div className="mt-3 space-y-1">
         <p className="wordmark text-[10px] text-ink-60">{site.name}</p>
         <p className="text-sm font-medium leading-6">{product.name}</p>
@@ -66,6 +73,6 @@ export function ProductCard({ product, priority = false }: { product: Product; p
           {sale && <span className="text-ink-60 line-through">{formatToman(product.price.amount)}</span>}
         </p>
       </div>
-    </Link>
+    </div>
   );
 }

@@ -4,8 +4,9 @@ import type { Category } from '@/lib/commerce/types';
 
 export function CategoryRail({ categories }: { categories: Category[] }) {
   return (
-    <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+      <h2 className="text-xl font-medium">مجموعه‌ها</h2>
+      <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {categories.map((category) =>
           category.image ? (
             <Link
@@ -18,10 +19,12 @@ export function CategoryRail({ categories }: { categories: Category[] }) {
                 alt={category.image.altText || category.name}
                 fill
                 sizes="(min-width: 640px) 25vw, 50vw"
-                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                className="object-cover transition-transform duration-500 group-hover:scale-105"
               />
-              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-ink/70 to-transparent" />
-              <span className="absolute inset-x-0 bottom-3 text-center text-sm text-cream">{category.name}</span>
+              <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-ink/75 to-transparent" />
+              <span className="wordmark absolute inset-x-0 bottom-4 text-center text-base text-cream">
+                {category.name}
+              </span>
             </Link>
           ) : (
             <Link
