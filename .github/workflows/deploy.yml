@@ -91,6 +91,14 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.DEPLOY_PATH }}
+            echo "Deploy directory:"
+            pwd
+            if [ ! -d ".git" ]; then
+              echo "ERROR: DEPLOY_PATH is not a git repository"
+              exit 1
+            fi
             git fetch --all
             git reset --hard origin/main
-            ./deploy.sh ${{ needs.build.outputs.image }}
+            echo "Deploying image:"
+            echo "${{ needs.build.outputs.image }}"
+            ./deploy.sh "${{ needs.build.outputs.image }}"
