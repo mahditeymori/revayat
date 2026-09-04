@@ -16,6 +16,7 @@
     "db:migrate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate",
     "db:studio": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs studio",
     "db:seed-admin": "node --env-file=.env.local --experimental-strip-types scripts/seed-admin.ts",
+    "db:seed-categories": "node --env-file=.env.local --experimental-strip-types scripts/seed-categories.ts",
     "migrate:legacy-json": "node --env-file=.env.local --experimental-strip-types scripts/migrate-legacy-json.ts",
     "release-expired-reservations": "node --env-file=.env.local --experimental-strip-types scripts/release-expired-reservations.ts"
   },

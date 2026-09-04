@@ -126,7 +126,7 @@ function Footer({
 }) {
   return (
     <footer className="mt-24 border-t border-cream-200 bg-cream-50">
-      <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_auto]">
+      <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-4">
         <div>
           <p className="wordmark text-lg tracking-wide">{site.name}</p>
           <p className="mt-4 max-w-sm text-sm leading-8 text-ink-60">{footerText || site.description}</p>
@@ -145,8 +145,8 @@ function Footer({
           </ul>
         </nav>
 
-        <nav aria-label="درباره" className="text-sm">
-          <p className="mb-4 font-medium uppercase tracking-wider text-ink-60">درباره ما</p>
+        <nav aria-label="راهنمای خرید و درباره" className="text-sm">
+          <p className="mb-4 font-medium uppercase tracking-wider text-ink-60">راهنمای خرید و درباره</p>
           <ul className="space-y-3.5 text-ink-60">
             {supportPages.map((p) => (
               <li key={p.slug}>
@@ -173,9 +173,10 @@ function Footer({
           </ul>
         </nav>
 
-        {site.enamadCode && (
-          <div className="text-sm">
-            <p className="mb-4 font-medium uppercase tracking-wider text-ink-60">اعتماد</p>
+        <div className="text-sm">
+          <p className="mb-4 font-medium uppercase tracking-wider text-ink-60">اعتماد و پرداخت</p>
+          <p className="mb-4 text-ink-60">پرداخت امن با درگاه بانکی</p>
+          {site.enamadCode && (
             <a
               referrerPolicy="origin"
               target="_blank"
@@ -192,8 +193,8 @@ function Footer({
                 className="h-24 w-24"
               />
             </a>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="border-t border-cream-200 px-4 py-6 text-center text-xs text-ink-60 sm:px-6">

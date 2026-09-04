@@ -17,6 +17,7 @@ const NAV: { href: string; label: string; permission: Permission }[] = [
   { href: '/admin/coupons', label: 'کد تخفیف', permission: 'coupons.view' },
   { href: '/admin/settings', label: 'تنظیمات سایت', permission: 'settings.manage' },
   { href: '/admin/support', label: 'محتوای پشتیبانی', permission: 'support.manage' },
+  { href: '/admin/inbox', label: 'پیام‌های مشتریان', permission: 'support.manage' },
   { href: '/admin/admins', label: 'مدیران', permission: 'admins.manage' },
 ];
 
@@ -27,7 +28,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <div dir="rtl" className="flex min-h-screen bg-slate-50 text-slate-900">
       <aside className="w-56 shrink-0 border-l border-slate-200 bg-white p-4">
-        <p className="mb-6 text-sm font-medium text-slate-900">پنل مدیریت روایت</p>
+        <a href="/admin" className="mb-6 block text-sm font-medium text-slate-900">
+          پنل مدیریت روایت
+        </a>
         <nav className="space-y-1">
           {links.map((item) => (
             <a

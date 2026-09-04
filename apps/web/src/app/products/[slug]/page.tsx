@@ -47,6 +47,11 @@ export default async function ProductPage({ params }: Props) {
 
   const price = effectivePrice(product);
   const inStock = product.variants.some((v) => v.availableForSale);
+  const specs = [
+    { label: 'جنس', value: product.material },
+    { label: 'نوع پارچه', value: product.fabricType },
+    { label: 'وزن', value: product.weight },
+  ].filter((s) => s.value);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -126,6 +131,22 @@ export default async function ProductPage({ params }: Props) {
               <h2 className="mb-2 font-medium text-ink">داستان طرح</h2>
               <p>{product.description}</p>
             </div>
+            {(specs.length > 0 || product.additionalNotes) && (
+              <div>
+                <h2 className="mb-2 font-medium text-ink">مشخصات محصول</h2>
+                {specs.length > 0 && (
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {specs.map((s) => (
+                      <div key={s.label} className="contents">
+                        <dt className="text-ink">{s.label}</dt>
+                        <dd>{s.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {product.additionalNotes && <p className="mt-2">{product.additionalNotes}</p>}
+              </div>
+            )}
             <div>
               <h2 className="mb-2 font-medium text-ink">ارسال</h2>
               <p>ارسال به سراسر ایران؛ تهران ۱ تا ۲ روز کاری، سایر شهرها ۲ تا ۴ روز کاری.</p>

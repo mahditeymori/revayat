@@ -28,6 +28,10 @@ type Props = {
     categoryId: string | null;
     featured: boolean;
     active: boolean;
+    material: string | null;
+    fabricType: string | null;
+    weight: string | null;
+    additionalNotes: string | null;
     variants: {
       id: string;
       size: string | null;
@@ -116,6 +120,16 @@ export default function ProductForm({ action, categories, defaultValues }: Props
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" name="active" defaultChecked={defaultValues?.active ?? true} /> فعال
         </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="col-span-2 text-sm font-medium text-slate-900">مشخصات</h2>
+        <Field label="جنس" name="material" defaultValue={defaultValues?.material ?? ''} />
+        <Field label="نوع پارچه" name="fabricType" defaultValue={defaultValues?.fabricType ?? ''} />
+        <Field label="وزن" name="weight" defaultValue={defaultValues?.weight ?? ''} />
+        <div className="col-span-2">
+          <Field label="توضیحات تکمیلی" name="additionalNotes" defaultValue={defaultValues?.additionalNotes ?? ''} textarea />
+        </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-6">

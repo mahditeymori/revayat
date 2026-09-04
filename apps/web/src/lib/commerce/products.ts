@@ -22,6 +22,12 @@ type BaseProductRow = {
   salePriceRial: number | null;
   categorySlug: string | null;
   featured: boolean;
+  // Only populated by getProduct's query (product-detail page) — listing
+  // queries (getProducts/getProductRecommendations) don't need these columns.
+  material?: string | null;
+  fabricType?: string | null;
+  weight?: string | null;
+  additionalNotes?: string | null;
 };
 
 type VariantRow = {
@@ -162,6 +168,10 @@ export async function hydrateProducts(baseRows: BaseProductRow[]): Promise<Produ
       salePrice: row.salePriceRial != null ? toRial(row.salePriceRial) : null,
       categorySlug: row.categorySlug,
       featured: row.featured,
+      material: row.material ?? null,
+      fabricType: row.fabricType ?? null,
+      weight: row.weight ?? null,
+      additionalNotes: row.additionalNotes ?? null,
     };
   });
 }
@@ -241,6 +251,10 @@ export const getProduct = unstable_cache(
         salePriceRial: products.salePriceRial,
         categorySlug: categories.slug,
         featured: products.featured,
+        material: products.material,
+        fabricType: products.fabricType,
+        weight: products.weight,
+        additionalNotes: products.additionalNotes,
       })
       .from(products)
       .leftJoin(categories, eq(products.categoryId, categories.id))

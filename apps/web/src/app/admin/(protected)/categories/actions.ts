@@ -2,7 +2,14 @@
 
 import { redirect } from 'next/navigation';
 import { requirePermission } from '@/lib/admin/session';
-import { categoryInput, createCategory, setCategoryActive, updateCategory } from '@/lib/admin/categories';
+import { uploadMediaFile } from '@/lib/admin/media';
+import {
+  categoryInput,
+  createCategory,
+  setCategoryActive,
+  updateCategory,
+  updateCategoryImage,
+} from '@/lib/admin/categories';
 
 function parse(formData: FormData) {
   const imageUrl = String(formData.get('imageUrl') ?? '').trim();
@@ -31,4 +38,14 @@ export async function toggleCategoryActiveAction(id: string, active: boolean): P
   await requirePermission('categories.manage');
   await setCategoryActive(id, active);
   redirect('/admin/categories');
+}
+
+export async function uploadCategoryImageAction(id: string, formData: FormData): Promise<void> {
+  await requirePermission('categories.manage');
+  const file = formData.get('file');
+  if (file instanceof File && file.size > 0) {
+    const asset = await uploadMediaFile(file);
+    await updateCategoryImage(id, asset.url);
+  }
+  redirect(`/admin/categories/${id}`);
 }

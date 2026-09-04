@@ -24,6 +24,10 @@ export const productInput = z.object({
   categoryId: z.string().uuid().nullable().default(null),
   featured: z.coerce.boolean().default(false),
   active: z.coerce.boolean().default(true),
+  material: z.string().trim().max(200).nullable().default(null),
+  fabricType: z.string().trim().max(200).nullable().default(null),
+  weight: z.string().trim().max(100).nullable().default(null),
+  additionalNotes: z.string().trim().max(2000).nullable().default(null),
   variants: z.array(variantInput).min(1, 'حداقل یک تنوع لازم است'),
 });
 

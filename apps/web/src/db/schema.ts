@@ -55,6 +55,8 @@ export const reservationStatusEnum = pgEnum('reservation_status', [
 
 export const couponTypeEnum = pgEnum('coupon_type', ['percentage', 'fixed']);
 
+export const supportMessageStatusEnum = pgEnum('support_message_status', ['open', 'answered', 'closed']);
+
 // ---------------------------------------------------------------------------
 // Catalog
 // ---------------------------------------------------------------------------
@@ -88,6 +90,12 @@ export const products = pgTable(
     categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
     featured: boolean('featured').notNull().default(false),
     active: boolean('active').notNull().default(true),
+    // Structured spec fields (جنس/نوع پارچه/وزن/توضیحات تکمیلی). رنگ/سایز are
+    // covered separately by product_variants.color/.size, not duplicated here.
+    material: text('material'),
+    fabricType: text('fabric_type'),
+    weight: text('weight'),
+    additionalNotes: text('additional_notes'),
     // Populated by lib/search/normalize.ts: canonicalizes ي->ی, ك->ک, strips
     // half-space/diacritics, converts Persian/Arabic digits to ASCII. Both the
     // tsvector and pg_trgm indexes below are built over THIS column, never the
@@ -458,6 +466,24 @@ export const supportPages = pgTable('support_pages', {
   bodyHtml: text('body_html').notNull().default(''),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// No accounts for storefront customers (guest checkout only) — referenceCode
+// is how a customer looks up their own message/reply without logging in.
+export const supportMessages = pgTable(
+  'support_messages',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    referenceCode: text('reference_code').notNull().unique(),
+    name: text('name').notNull(),
+    contact: text('contact').notNull(),
+    message: text('message').notNull(),
+    status: supportMessageStatusEnum('status').notNull().default('open'),
+    adminReply: text('admin_reply'),
+    repliedAt: timestamp('replied_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('support_messages_status_idx').on(table.status)],
+);
 
 export const faqs = pgTable(
   'faqs',

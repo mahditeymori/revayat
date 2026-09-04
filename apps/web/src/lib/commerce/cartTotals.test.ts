@@ -30,6 +30,10 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     salePrice: null,
     categorySlug: null,
     featured: false,
+    material: null,
+    fabricType: null,
+    weight: null,
+    additionalNotes: null,
     ...overrides,
   };
 }

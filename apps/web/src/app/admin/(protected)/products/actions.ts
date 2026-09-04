@@ -28,6 +28,10 @@ function parseProduct(formData: FormData) {
     categoryId: categoryId || null,
     featured: formData.get('featured') === 'on',
     active: formData.get('active') === 'on',
+    material: String(formData.get('material') ?? '').trim() || null,
+    fabricType: String(formData.get('fabricType') ?? '').trim() || null,
+    weight: String(formData.get('weight') ?? '').trim() || null,
+    additionalNotes: String(formData.get('additionalNotes') ?? '').trim() || null,
     variants,
   });
 }

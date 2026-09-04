@@ -15,7 +15,7 @@ export default function CategoryForm({ action, defaultValues }: Props) {
       <Field label="نام" name="name" defaultValue={defaultValues?.name} required />
       <Field label="اسلاگ (انگلیسی)" name="slug" defaultValue={defaultValues?.slug} required />
       <Field label="توضیحات" name="description" defaultValue={defaultValues?.description} textarea />
-      <Field label="آدرس تصویر" name="imageUrl" defaultValue={defaultValues?.imageUrl ?? ''} />
+      <input type="hidden" name="imageUrl" value={defaultValues?.imageUrl ?? ''} />
       <Field label="ترتیب نمایش" name="sortOrder" type="number" defaultValue={String(defaultValues?.sortOrder ?? 0)} />
 
       <button type="submit" className="rounded bg-slate-900 px-4 py-2 text-sm text-white">

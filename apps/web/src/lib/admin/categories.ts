@@ -32,6 +32,12 @@ export async function updateCategory(id: string, input: CategoryInput) {
   return row;
 }
 
+export async function updateCategoryImage(id: string, imageUrl: string) {
+  const [row] = await db.update(categories).set({ imageUrl }).where(eq(categories.id, id)).returning();
+  updateTag('categories');
+  return row;
+}
+
 // Archive, never DELETE: products.category_id is ON DELETE SET NULL, so a
 // hard delete would silently orphan any product still assigned to this
 // category. Archiving drops it from storefront listings without touching

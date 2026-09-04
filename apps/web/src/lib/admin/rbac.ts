@@ -75,6 +75,7 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: Permission }[] = [
   { prefix: '/admin/admins', permission: 'admins.manage' },
   { prefix: '/admin/categories', permission: 'categories.manage' },
   { prefix: '/admin/coupons', permission: 'coupons.view' },
+  { prefix: '/admin/inbox', permission: 'support.manage' },
   { prefix: '/admin/inventory', permission: 'inventory.manage' },
   { prefix: '/admin/orders', permission: 'orders.view' },
   { prefix: '/admin/payments', permission: 'payments.view' },

@@ -37,6 +37,10 @@ export type Product = {
   salePrice: Money | null;
   categorySlug: string | null;
   featured: boolean;
+  material: string | null;
+  fabricType: string | null;
+  weight: string | null;
+  additionalNotes: string | null;
 };
 
 export type Category = {
