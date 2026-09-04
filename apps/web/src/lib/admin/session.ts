@@ -7,7 +7,7 @@ import { db } from '@/db/client';
 import { admins, adminSessions } from '@/db/schema';
 import { hasPermission, type AdminRole, type Permission } from './rbac';
 
-const COOKIE = 'revayat_admin_session';
+export const COOKIE = 'revayat_admin_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 export type AdminUser = { id: string; email: string; role: AdminRole };
@@ -53,12 +53,11 @@ export async function createSession(adminId: string): Promise<void> {
   await setSessionCookie(token, expiresAt);
 }
 
-// Reads + validates the current request's session cookie. Returns null for
-// any invalid/expired/deactivated case — callers that need to guarantee
-// unauthenticated visitors never see protected data must use requireAdmin()
-// below, not this directly.
-export async function getSession(): Promise<AdminSession | null> {
-  const token = (await cookies()).get(COOKIE)?.value;
+// Validates a raw token against the DB (hash + expiry + admin.active).
+// Exported so proxy.ts — which reads the cookie off NextRequest, not
+// next/headers — can run the exact same check at the request boundary
+// without duplicating the query.
+export async function getSessionByToken(token: string | undefined): Promise<AdminSession | null> {
   if (!token) return null;
 
   const tokenHash = hashToken(token);
@@ -77,6 +76,15 @@ export async function getSession(): Promise<AdminSession | null> {
 
   if (!row || !row.active) return null;
   return { admin: { id: row.adminId, email: row.email, role: row.role }, sessionId: row.sessionId };
+}
+
+// Reads + validates the current request's session cookie. Returns null for
+// any invalid/expired/deactivated case — callers that need to guarantee
+// unauthenticated visitors never see protected data must use requireAdmin()
+// below, not this directly.
+export async function getSession(): Promise<AdminSession | null> {
+  const token = (await cookies()).get(COOKIE)?.value;
+  return getSessionByToken(token);
 }
 
 export async function destroySession(): Promise<void> {

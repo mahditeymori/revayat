@@ -17,6 +17,7 @@
 //    past the first terminal state (see applyDecision's guards below).
 import 'server-only';
 import { and, eq, ne, sql } from 'drizzle-orm';
+import { revalidateTag } from 'next/cache';
 import { db } from '@/db/client';
 import { orderItems, orders, payments } from '@/db/schema';
 import { checkRateLimit } from '@/lib/security/rate-limit';
@@ -99,6 +100,10 @@ async function ensureHold(order: OrderRow): Promise<void> {
       await applyCoupon(tx, order.id, order.couponId, order.shippingPhone, CHECKOUT_HOLD_TTL_MS);
     }
   });
+
+  // A lapsed hold was just re-reserved — the 'products' cache must not keep
+  // serving the pre-reservation availableStock.
+  revalidateTag('products', { expire: 0 });
 }
 
 /**
@@ -275,6 +280,10 @@ async function applyDecision(paymentRow: PaymentRow, decision: Decision, raw: Ga
       .set({ paymentStatus: 'failed', updatedAt: new Date() })
       .where(and(eq(orders.id, orderId), ne(orders.paymentStatus, 'paid')));
   });
+
+  // releaseReservations above just freed stock back to sale — the 'products'
+  // cache must not keep serving it as unavailable.
+  revalidateTag('products', { expire: 0 });
 
   if (decision.kind === 'canceled') return { kind: 'canceled', orderId };
   if (decision.kind === 'amount-mismatch') return { kind: 'amount-mismatch', orderId };

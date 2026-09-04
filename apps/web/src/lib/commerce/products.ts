@@ -219,7 +219,13 @@ export const getProducts = unstable_cache(
     return hydrateProducts(baseRows);
   },
   ['commerce:products'],
-  { tags: ['products'] },
+  // revalidateTag('products') fires on every in-process write (checkout
+  // reserve, payment settle/release, admin edit — see orders.ts,
+  // payment-flow.ts, admin/products.ts, admin/inventory.ts). `revalidate: 30`
+  // is only a backstop for scripts/release-expired-reservations.ts, which
+  // runs as a standalone process outside Next's request scope and so cannot
+  // call revalidateTag itself.
+  { tags: ['products'], revalidate: 30 },
 );
 
 export const getProduct = unstable_cache(

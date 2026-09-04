@@ -1,5 +1,6 @@
 import 'server-only';
 import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { revalidateTag } from 'next/cache';
 import { db } from '@/db/client';
 import { customers, orderItems, orders, productVariants, products } from '@/db/schema';
 import { getCart } from './cart';
@@ -83,7 +84,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     throw new Error('Cart is empty');
   }
 
-  return db.transaction(async (tx) => {
+  const order = await db.transaction(async (tx) => {
     const variantIds = cart.items.map((item) => item.variantId);
     const liveVariants = await tx
       .select({
@@ -182,6 +183,11 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
 
     return mapOrder(orderRow, insertedItems);
   });
+
+  // reserveStock above just consumed stock — the 'products' cache must not
+  // keep serving the pre-reservation availableStock.
+  revalidateTag('products', { expire: 0 });
+  return order;
 }
 
 export async function getOrder(id: number): Promise<Order | null> {
