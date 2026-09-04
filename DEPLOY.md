@@ -15,8 +15,8 @@ down with it.
 ## Server setup (once)
 
 ```bash
-git clone git@github.com:mahditeymori/revayat.git /srv/revayat
-cd /srv/revayat
+git clone git@github.com:mahditeymori/revayat.git /home/ubuntu/revayat
+cd /home/ubuntu/revayat
 cp .env.example .env
 $EDITOR .env          # real values — this file must never be committed
 ```
@@ -71,7 +71,7 @@ it from the full repo checkout on the server, attached to the compose
 network, pointed at the `db` service by name:
 
 ```bash
-cd /srv/revayat/apps/web
+cd /home/ubuntu/revayat/apps/web
 npm ci
 DATABASE_URL="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432/$POSTGRES_DB" \
   docker compose -f ../../docker-compose.yml run --rm --no-deps \
@@ -152,7 +152,7 @@ Settings → Secrets and variables → Actions:
 | `SSH_HOST` | server IP or hostname |
 | `SSH_USER` | deploy user |
 | `SSH_KEY` | private key for that user |
-| `DEPLOY_PATH` | e.g. `/srv/revayat` |
+| `DEPLOY_PATH` | e.g. `/home/ubuntu/revayat` |
 | `NEXT_PUBLIC_SITE_URL` | `https://revayat.shop` |
 | `NEXT_PUBLIC_ENAMAD_CODE` | optional |
 
@@ -223,7 +223,7 @@ pre-change `pg_dump`, which loses any data written after that dump.
 
 ```bash
 openssl rand -base64 32            # on the server
-$EDITOR /srv/revayat/.env          # set ADMIN_SESSION_SECRET
+$EDITOR /home/ubuntu/revayat/.env          # set ADMIN_SESSION_SECRET
 docker compose up -d --force-recreate web
 ```
 
@@ -256,7 +256,7 @@ deploy without it, because a site that silently cannot take payments is worse
 than a failed deploy.
 
 ```bash
-$EDITOR /srv/revayat/.env          # set ZIBAL_MERCHANT=<merchant id>
+$EDITOR /home/ubuntu/revayat/.env          # set ZIBAL_MERCHANT=<merchant id>
 ./deploy.sh                        # redeploy the current pin
 ```
 

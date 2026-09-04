@@ -1,0 +1,82 @@
+name: Build Image (Manual)
+
+# Build-only. Never deploys — no SSH step, no `deploy` job, no
+# `secrets.SSH_*`/`DEPLOY_PATH` reference anywhere in this file. Exists so a
+# GHCR image can be published from a non-main branch (e.g.
+# rebuild/next-commerce) without going through deploy.yml's push:main trigger
+# or risking its bundled deploy job via manual dispatch.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA to build (defaults to the branch this workflow was run from)'
+        required: false
+        type: string
+
+concurrency:
+  group: build-image-manual-${{ github.event.inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/revayat-web
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: apps/web
+        run: npx tsc --noEmit
+
+      - name: Test
+        working-directory: apps/web
+        run: npm test
+
+      - id: meta
+        run: echo "image=${IMAGE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          push: true
+          # Same tagging strategy as deploy.yml: SHA is the immutable
+          # deployment target, latest is a convenience pointer only.
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ env.IMAGE }}:latest
+          build-args: |
+            NEXT_PUBLIC_SITE_URL=${{ secrets.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_ENAMAD_CODE=${{ secrets.NEXT_PUBLIC_ENAMAD_CODE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -119,9 +119,9 @@ what to generate. No values below; commands only.
 
 | Secret | Update procedure | Restart scope |
 |---|---|---|
-| `ADMIN_SESSION_SECRET` | `openssl rand -base64 32` on the server → `$EDITOR /srv/revayat/.env` → set var. Documented in `DEPLOY.md` "Rotating the admin session secret". | `docker compose up -d --force-recreate web`. All existing admin sessions invalidated (expected) — every admin must log in again. |
-| `ZIBAL_MERCHANT` | Get real merchant id from the Zibal dashboard → `$EDITOR /srv/revayat/.env` → set var. Documented in `DEPLOY.md` "Configuring the merchant". | `./deploy.sh` (redeploys current image pin, which reads the new `.env` value at container start). |
-| `POSTGRES_PASSWORD` | Generate fresh value → `$EDITOR /srv/revayat/.env` → set var **and** apply it inside the running DB first (`docker compose exec db psql -U <user> -c "ALTER USER <user> WITH PASSWORD '<new>';"`) so the old value stops working atomically with the `.env` change — not documented in `DEPLOY.md` yet, add before go-live. | `docker compose up -d --force-recreate db web` (both — `web`'s `DATABASE_URL` is built from this var at container start, per §3 table above). Expect a brief connection gap while `db` restarts. |
+| `ADMIN_SESSION_SECRET` | `openssl rand -base64 32` on the server → `$EDITOR /home/ubuntu/revayat/.env` → set var. Documented in `DEPLOY.md` "Rotating the admin session secret". | `docker compose up -d --force-recreate web`. All existing admin sessions invalidated (expected) — every admin must log in again. |
+| `ZIBAL_MERCHANT` | Get real merchant id from the Zibal dashboard → `$EDITOR /home/ubuntu/revayat/.env` → set var. Documented in `DEPLOY.md` "Configuring the merchant". | `./deploy.sh` (redeploys current image pin, which reads the new `.env` value at container start). |
+| `POSTGRES_PASSWORD` | Generate fresh value → `$EDITOR /home/ubuntu/revayat/.env` → set var **and** apply it inside the running DB first (`docker compose exec db psql -U <user> -c "ALTER USER <user> WITH PASSWORD '<new>';"`) so the old value stops working atomically with the `.env` change — not documented in `DEPLOY.md` yet, add before go-live. | `docker compose up -d --force-recreate db web` (both — `web`'s `DATABASE_URL` is built from this var at container start, per §3 table above). Expect a brief connection gap while `db` restarts. |
 | `ar-mehdi-privatekey.pem` | Not an env var — a file. Revoke/remove from every server (`authorized_keys`), service, or TLS config it was ever installed to; issue and install a fresh keypair in its place. No `.env` entry exists for this — it was never meant to be in the repo at all (see §3 audit above). | Per-service — SSH `authorized_keys` takes effect immediately on removal; any TLS/cert usage needs a reload of the consuming service. |
 | Seeded admin password (`npm run db:seed-admin` default) | Log in once with the seeded credentials, then reset immediately via **مدیریت → تیم** (per-account hashed row in `admins`, not an env var — see `DEPLOY.md` "Rotating the admin session secret"). | None — takes effect on next login attempt, no container restart needed. |
 
@@ -485,4 +485,60 @@ after a real cutover:
       `revayat_backups` volume (`docker compose logs backup`)
 - [ ] Certbot renewal loop logs no errors (`docker compose logs certbot`)
 - [ ] Disk usage on `revayat_pgdata`/`revayat_uploads`/`revayat_backups`
+
+## 12. Phase 9.1 — GHCR image preparation
+
+**Problem**: production's `docker-compose.yml` pins `web` to
+`ghcr.io/mahditeymori/revayat-web:latest`, but that package has never been
+published — `deploy.yml`'s `build` job (the only thing that pushes to GHCR)
+only runs on `push: branches: [main]`, and this project is still on
+`rebuild/next-commerce`. The VPS cannot `docker pull` an image that was never
+built.
+
+**How CI creates images** — `.github/workflows/deploy.yml`'s `build` job:
+checkout → gitleaks secret scan → `npm ci`/`tsc --noEmit`/`npm test` (in
+`apps/web`) → `docker build` with `NEXT_PUBLIC_SITE_URL`/
+`NEXT_PUBLIC_ENAMAD_CODE` as build-args (sourced from repo secrets) → push
+two tags: `ghcr.io/mahditeymori/revayat-web:<git-sha>` (immutable, the actual
+deploy target) and `ghcr.io/mahditeymori/revayat-web:latest` (convenience
+pointer only). Auth is `docker/login-action@v3` against `ghcr.io` using
+`github.actor` + the automatic `secrets.GITHUB_TOKEN` — no separate PAT.
+`build` only has `contents: read`/`packages: write`; the trigger is
+`push: branches: [main]` (plus an existing bare `workflow_dispatch:`, which
+also runs the downstream `deploy` job over SSH — dispatching `deploy.yml`
+manually is *not* build-only).
+
+**How to manually trigger a build** (new, this phase) —
+`.github/workflows/build-image-manual.yml`: `workflow_dispatch:` only, one
+optional `ref` input (branch/tag/SHA; defaults to whatever branch the run was
+started from). Steps: checkout at `ref` → gitleaks → install/typecheck/test →
+docker build+push, same two-tag strategy as `deploy.yml`, same build-args,
+same `GITHUB_TOKEN` auth. **No SSH step, no `deploy` job, no
+`secrets.SSH_*`/`DEPLOY_PATH` reference anywhere in the file** — running it
+can only publish an image, never touch the VPS. Trigger from the GitHub UI:
+Actions → "Build Image (Manual)" → Run workflow → pick the branch (e.g.
+`rebuild/next-commerce`) and optionally a `ref`.
+
+**How the VPS pulls the image** — unchanged from `DEPLOY.md`: the VPS never
+builds, only pulls. Manual cutover pulls the immutable SHA tag explicitly
+(`docker pull ghcr.io/mahditeymori/revayat-web:<sha>` then
+`./deploy.sh ghcr.io/mahditeymori/revayat-web:<sha>`), never bare `:latest`,
+so the deploy target is always a specific, known-good commit. The package
+must be public, or the VPS needs `docker login ghcr.io` with a token that has
+`read:packages` — not addressed by this phase (out of scope: no VPS changes
+made).
+
+**Rollback using the SHA image** — unchanged mechanism (`rollback.sh` /
+`deploy.sh`'s own auto-rollback): every deploy writes the previous image tag
+to `.deploy-image.prev` before switching, so `./rollback.sh` (=
+`./deploy.sh "$(cat .deploy-image.prev)"`) re-pulls and re-deploys the prior
+SHA-tagged image. This works identically whether the current image came from
+`deploy.yml`'s automatic build or this phase's manual one — GHCR doesn't
+distinguish how a tag was pushed, only that the SHA tag is immutable once
+published.
+
+**Not changed this phase**: `deploy.yml` (deploy job / SSH logic / triggers
+untouched), `docker-compose.yml` (still pins `:latest` as the compose
+default — manual cutover overrides via `WEB_IMAGE`/explicit SHA), VPS state
+(nothing pulled, pushed, or deployed).
       volumes — no unexpected growth
