@@ -541,4 +541,141 @@ published.
 untouched), `docker-compose.yml` (still pins `:latest` as the compose
 default — manual cutover overrides via `WEB_IMAGE`/explicit SHA), VPS state
 (nothing pulled, pushed, or deployed).
-      volumes — no unexpected growth
+
+## 13. Phase 9.2 — GHCR image publish verification (no deploy) — BLOCKED
+
+Attempted to actually trigger `build-image-manual.yml` end-to-end to confirm a
+real image lands in GHCR. Two blockers found, neither fixable by an agent:
+
+1. **`gitleaks` fails the build** — the repo's git history contains the
+   `ar-mehdi-privatekey.pem` private key from the 2026-08-15 commit `401560b`
+   (already flagged §10 item 6). `gitleaks/gitleaks-action@v2` scans full
+   history by default, so every CI run — manual or automatic — fails at the
+   secret-scan step before it ever reaches `docker build`. Fixing this means
+   rewriting git history (`git filter-repo`/BFG) to purge the blob, which is
+   destructive and irreversible for anyone else with a clone — **requires
+   explicit user decision**, not something to do unprompted.
+2. **Zero GitHub Actions secrets configured** on the repo — `NEXT_PUBLIC_SITE_URL`,
+   `NEXT_PUBLIC_ENAMAD_CODE`, and whatever `deploy.yml`'s `deploy` job needs
+   are all unset. Even past the gitleaks gate, the build-arg step would embed
+   empty strings. **Requires the user to add these in GitHub → Settings →
+   Secrets and variables → Actions** — no CLI/API path available to this
+   agent without a token.
+
+Also surfaced: `build-image-manual.yml` had to be pushed to `main` directly
+(commit `c4e6f2a`, explicit user approval given at the time) because
+`workflow_dispatch` only works from a workflow file already on the default
+branch. That push incidentally triggered `deploy.yml`'s own `push:main`
+pipeline (run `33855978339`) — caught and canceled before any build/push/SSH
+step ran.
+
+**Verdict: BLOCKED.** No image has ever been published to GHCR. Both
+blockers need the repo owner, not this agent.
+
+## 14. Phase 9.4 — Production migration preflight audit
+
+Audited (read-only, no `.env`/`docker-compose.yml`/service changes):
+
+1. `apps/web/scripts/migrate-legacy-json.ts` — reads legacy `products.json`/
+   `settings.json`, requires `DATABASE_URL`, per-product idempotent (skips by
+   slug if already present). **Non-atomic gap**: product/images/variants are
+   three separate inserts, not one transaction — a crash mid-product leaves a
+   variant-less product that a re-run then skips instead of repairing. Not a
+   go-live blocker, but a known repair-by-rerun-once limitation.
+2. `apps/web/scripts/seed-admin.ts` — requires `DATABASE_URL`/`ADMIN_EMAIL`/
+   `ADMIN_PASSWORD` (min 10 chars), refuses to run if the email already has an
+   admin row, `bcrypt` cost 12. No issues found.
+3. `src/db/migrations/0000_free_speed.sql` + `0001_fair_cerise.sql` — re-swept,
+   confirmed zero destructive statements (matches §11 item 1).
+4. Verified presence (not values) of the 9 named production env vars in
+   `/home/ubuntu/revayat/.env` on the VPS via targeted `grep -qE '^VAR='` per
+   variable — all 9 present. (A broader open-ended `find ... -iname '.env*'`
+   sweep was attempted first and correctly denied by the permission system as
+   unscoped credential exploration; re-scoped to exactly the named vars.)
+5. **New blocker found**: the production runtime image (`runner` stage,
+   `Dockerfile`) does not include `migrate-legacy-json.ts`, `seed-admin.ts`,
+   or the devDependencies (`bcryptjs`, tsx-equivalent strip-types runtime)
+   those scripts need — `docker compose exec web npm run migrate:legacy-json`
+   would fail on the real deployed container. This directly motivated Phase 9.5.
+
+**Verdict: BLOCKED** on Phase 9.2's two items (image never published) — audit
+itself is otherwise clean.
+
+## 15. Phase 9.5 — Legacy migration runner (designed + tested, not executed)
+
+Since the runtime image can't run the legacy-migration/seed-admin scripts
+(§14 item 5), designed a throwaway **migration runner** that needs no new
+image and no compose changes:
+
+- Plain `node:22-alpine` container, `--rm`, attached to the existing
+  `revayat_default` compose network (so it can reach `db` by hostname — no
+  host port exposure, no compose file edit).
+- Bind-mounts: the VPS's existing full source checkout at
+  `/home/ubuntu/revayat/apps/web` → `/app` (read-write, **not** `:ro` — a
+  read-only parent blocks Docker from creating a nested mountpoint for the
+  next mount underneath it), an isolated named volume → `/app/node_modules`
+  (keeps `npm ci`'s ~486 packages off the real checkout and out of git),
+  and the legacy data volume `revayat_revayat_data` → `/legacy-data:ro`
+  (already holds `products.json`/`settings.json` at paths the script expects,
+  no translation needed).
+- `npm ci` with no `NODE_ENV=production` set installs devDependencies too —
+  confirmed empirically (486 packages) — so no custom builder-stage image is
+  needed, plain `node:22-alpine` is enough.
+- Env: `DATABASE_URL=postgresql://<user>:<pass>@db:5432/<db>` (compose
+  internal hostname `db`, matches `docker-compose.yml`'s own `web` service
+  wiring) plus whatever `migrate-legacy-json.ts`/`seed-admin.ts` need
+  (`ADMIN_EMAIL`, `ADMIN_PASSWORD` for the latter).
+- **Tested safely**: ran the exact command chain with `DATABASE_URL` pointed
+  at a deliberately unreachable host — confirmed the script starts, reads the
+  real legacy JSON correctly, and fails cleanly on `ECONNREFUSED` without ever
+  touching the real database. No production data was read into a live query,
+  no writes attempted.
+- Cleanup: the scratch `/tmp/mig-node-modules` host-path stand-in used during
+  this test left root-owned files (created by `npm ci` running as root inside
+  the container) that the `ubuntu` host user could not `rm -rf` directly.
+  Fixed post-session via `docker run --rm -v /tmp/mig-node-modules:/target
+  alpine sh -c 'rm -rf /target/*'` (same root-context trick removes what a
+  root-context process created), then removed the empty mountpoint itself via
+  a second root container mounting `/tmp` — confirmed clean, and confirmed no
+  leftover `node:22-alpine`-ancestor containers via `docker ps -a --filter
+  ancestor=node:22-alpine`.
+
+**Future cutover commands** (not run — for the real cutover only, after §13's
+blockers are cleared and `db` is actually up):
+
+```
+# one-time, only on a brand-new DB with no products yet
+docker run --rm --network revayat_default \
+  -v /home/ubuntu/revayat/apps/web:/app \
+  -v mig-node-modules:/app/node_modules \
+  -v revayat_revayat_data:/legacy-data:ro \
+  -w /app -e DATABASE_URL=postgresql://<user>:<pass>@db:5432/<db> \
+  node:22-alpine sh -c "npm ci && cp /legacy-data/products.json /legacy-data/settings.json data/ && npx --yes tsx scripts/migrate-legacy-json.ts"
+
+# one-time, only if admins table is empty
+docker run --rm --network revayat_default \
+  -v /home/ubuntu/revayat/apps/web:/app \
+  -v mig-node-modules:/app/node_modules \
+  -w /app -e DATABASE_URL=postgresql://<user>:<pass>@db:5432/<db> \
+  -e ADMIN_EMAIL=<email> -e ADMIN_PASSWORD=<password, 10+ chars> \
+  node:22-alpine sh -c "npm ci && npx --yes tsx scripts/seed-admin.ts"
+
+# cleanup afterward
+docker volume rm mig-node-modules
+```
+
+**Verdict**: design + dry-run test complete. Still blocked on §13's two items
+before any real image exists to deploy against — this runner only matters
+once `db`/`web` are actually up on the VPS.
+
+## 16. Current overall status (as of this update)
+
+| Item | Status | Who unblocks it |
+|---|---|---|
+| App code, tests, load tests, RBAC, backup/restore | VERIFIED (§1–§10) | done |
+| GHCR image ever published | **BLOCKED** | user: add GitHub Actions secrets; user: decide on git-history rewrite for the leaked key |
+| Legacy-data migration path | Designed + dry-run tested (§15) | none — ready once §13 clears |
+| Actual production cutover | **NOT STARTED** | user: explicit go-ahead, only after §13 clears |
+
+Nothing here authorizes a merge to `main` or a production deploy — both
+remain explicitly out of scope until the user says so.
