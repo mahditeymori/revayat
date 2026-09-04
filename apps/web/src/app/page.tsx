@@ -1,10 +1,12 @@
-import Link from 'next/link';
 import { site } from '@/lib/site';
 import { getProducts } from '@/lib/commerce/products';
 import { getCategories } from '@/lib/commerce/categories';
 import { getSiteSettings } from '@/lib/commerce/settings';
-import { ProductCard } from '@/components/ProductCard';
 import { safe } from '@/lib/safe';
+import { HomeHeader } from '@/components/home/HomeHeader';
+import { Hero } from '@/components/home/Hero';
+import { CategoryRail } from '@/components/home/CategoryRail';
+import { FeaturedProducts } from '@/components/home/FeaturedProducts';
 
 export default async function HomePage() {
   const [featured, categories, settings] = await Promise.all([
@@ -15,57 +17,15 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="mx-auto max-w-5xl px-4 py-20 text-center sm:py-28">
-        {settings.heroImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded, arbitrary-origin hero image
-          <img
-            src={settings.heroImageUrl}
-            alt={settings.heroTitle || site.nameFa}
-            fetchPriority="high"
-            className="mx-auto mb-8 max-h-64 object-contain"
-          />
-        )}
-        <h1 className="wordmark text-3xl text-ink sm:text-4xl">{settings.heroTitle || site.nameFa}</h1>
-        <p className="mx-auto mt-4 max-w-xl text-ink-60">{settings.heroSubtitle || site.tagline}</p>
-        <Link
-          href="/collections"
-          className="mt-8 inline-block border border-ink px-8 py-3 text-sm hover:bg-ink hover:text-cream"
-        >
-          مشاهده مجموعه‌ها
-        </Link>
-      </section>
+      <HomeHeader />
+      <Hero
+        title={settings.heroTitle || site.nameFa}
+        subtitle={settings.heroSubtitle || site.tagline}
+        imageUrl={settings.heroImageUrl}
+      />
 
-      {categories.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {categories.map((category) => (
-              <Link
-                key={category.id}
-                href={`/collections/${category.slug}`}
-                className="border border-cream-200 px-4 py-6 text-center text-sm hover:border-ink"
-              >
-                {category.name}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {featured.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-medium">محصولات ویژه</h2>
-            <Link href="/collections" className="text-sm text-ink-60 hover:text-ink">
-              مشاهده همه
-            </Link>
-          </div>
-          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 lg:grid-cols-4">
-            {featured.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </section>
-      )}
+      {categories.length > 0 && <CategoryRail categories={categories} />}
+      {featured.length > 0 && <FeaturedProducts products={featured} />}
 
       {featured.length === 0 && categories.length === 0 && (
         <section className="mx-auto max-w-2xl px-4 py-10 text-center text-sm text-ink-60">

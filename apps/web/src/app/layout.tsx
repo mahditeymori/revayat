@@ -8,6 +8,7 @@ import { safe } from '@/lib/safe';
 import { CartProvider } from '@/components/cart/CartProvider';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 import { CartTrigger } from '@/components/cart/CartTrigger';
+import { HeaderGate } from '@/components/home/HeaderGate';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -70,7 +71,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {settings?.announcement && (
             <div className="bg-ink px-4 py-2 text-center text-xs text-cream">{settings.announcement}</div>
           )}
-          <Header />
+          <HeaderGate>
+            <Header />
+          </HeaderGate>
           <main id="main" className="flex-1">
             {children}
           </main>
