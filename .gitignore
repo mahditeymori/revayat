@@ -22,3 +22,9 @@ apps/web/uploads/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/blob-report/
+load-tests/test-results/
+load-tests/playwright-report/
+
+# Load-test run artifacts (Artillery reports)
+load-tests/storefront-report.json
+load-tests/*-report.json
