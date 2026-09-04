@@ -312,14 +312,17 @@ apply to that layer.
 | Uploads | VERIFIED | N/A | Not covered by current e2e specs — add before go-live if uploads changed recently | N/A | NOT RUN |
 | SEO | N/A | N/A | Manually reviewed §4 this phase, not automated | N/A | N/A |
 | Security (rate limiting, RBAC, session) | VERIFIED (`rate-limit` tests, `src/lib/admin/rbac.test.ts`) | VERIFIED | **Content-blocking VERIFIED, status-code NOT VERIFIED** — `rbac.spec.ts` (Phase 8.1 §4, new) confirms `requireAdmin()`/`requirePermission()` correctly withhold real page content in every case tested, but a real Next.js-16 streaming gap means the HTTP status stays `200` instead of `404` — see §8 | N/A | VERIFIED (auth stress, §6.4 — rate limit/lockout/enumeration-resistance) |
-| Backups | N/A | Automated dump confirmed running | N/A | N/A | N/A — **restore untested, see §7** |
+| Backups | N/A | Automated dump confirmed running | N/A | N/A | VERIFIED — **restore tested, Phase 8.1, see §7** |
 
 ## 10. Remaining blockers before go-live
 
-1. **Backup restore has never been exercised.** Highest-priority gap — an
-   unverified backup is not a backup.
-2. **Load testing not executed** — no scenario has run against any target
-   yet; §9's load-test column is `NOT RUN` everywhere.
+1. ~~Backup restore has never been exercised.~~ **Resolved, Phase 8.1** —
+   real `pg_dump`/`pg_restore` cycle executed against a disposable staging
+   Postgres, row counts matched exactly across every table, see §7.
+2. ~~Load testing not executed.~~ **Resolved, Phase 8.1** — Artillery +
+   Playwright scenarios executed against a disposable staging stack, see
+   §6/§9. `payment-callback.yml` still not run by design (§6.5) — not a
+   blocker, can be run separately on request.
 3. **RBAC status-code gap (§8, new this phase)**: real content-leak
    protection confirmed working (VERIFIED), but `notFound()` called from a
    protected admin page returns HTTP `200` instead of `404` due to Next.js
