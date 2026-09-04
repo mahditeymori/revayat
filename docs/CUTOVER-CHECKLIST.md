@@ -373,3 +373,116 @@ apply to that layer.
 
 All items above are now operational/verification only — no known application
 code changes remain outstanding from Phases 8.1–8.2.
+
+## 11. Phase 9 — Production cutover preparation
+
+Preparation only, per this phase's explicit brief: no merge to `main`, no
+automatic deploy, no production contact. Every action below ran against
+disposable local Docker resources (image tag `revayat-web:phase9-verify`, a
+throwaway `postgres:16-alpine` container, an isolated bridge network) — all
+removed after use, confirmed via `docker ps -a`/`docker network ls`/`docker
+rmi` post-teardown.
+
+**1. Final migration checklist** — unchanged since §2/§7.1: two files,
+`0000_free_speed.sql` (initial schema) and `0001_fair_cerise.sql` (roles,
+`inventory_adjustments`, three nullable/defaulted columns). Re-swept both this
+phase with a targeted grep for `ALTER`/`DROP`/`TRUNCATE` — every hit is either
+an `ADD CONSTRAINT ... FOREIGN KEY`, an `ALTER TYPE ... ADD VALUE`, or an `ADD
+COLUMN` with a default; zero `DROP`, zero `NOT NULL` without a default.
+`meta/_journal.json` confirms strict order (`idx 0` → `0000_free_speed`, `idx
+1` → `0001_fair_cerise`). No new migrations exist since Phase 8.
+
+**2. Production environment validation** — cross-checked `.env.example`
+against `docker-compose.yml`'s consumed vars and `deploy.sh`'s enforced
+checks. All seven vars (`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_ENAMAD_CODE`,
+`POSTGRES_USER`/`PASSWORD`/`DB`, `ADMIN_SESSION_SECRET`, `ZIBAL_MERCHANT`,
+`BACKUP_RETENTION_DAYS`) are consumed somewhere in the compose file or app.
+**Gap found**: `deploy.sh` hard-refuses a deploy with a missing/empty
+`ZIBAL_MERCHANT`, but enforces nothing on `ADMIN_SESSION_SECRET` or
+`POSTGRES_PASSWORD` still holding the literal `change-me` placeholder from
+`.env.example` — nothing technical stops a first deploy with default secrets.
+Not a code blocker (this is an ops-discipline gap, not a bug), but the manual
+cutover commands below include an explicit pre-flight grep for `change-me` in
+`.env` to close it procedurally.
+
+**3. Docker image build verification — executed.** `docker build -f
+apps/web/Dockerfile --build-arg NEXT_PUBLIC_SITE_URL=https://revayat.shop
+apps/web` succeeded (292MB image, non-root `nextjs` user confirmed via
+`docker inspect`, `CMD ["node","server.js"]`). **Finding**: building *without*
+`--build-arg NEXT_PUBLIC_SITE_URL=...` fails — `Error: Failed to collect page
+data for /admin/admins`, root cause `new URL('')` in `src/app/layout.tsx:14`
+(`metadataBase: new URL(site.url)`), because `src/lib/site.ts` reads
+`NEXT_PUBLIC_SITE_URL` with no fallback. **Not a blocker**: `.github/workflows/deploy.yml:74`
+already passes this build-arg from a GitHub secret on every CI build, so the
+real deploy path is unaffected. Documented here because it means the
+Dockerfile cannot be built standalone (e.g. by a human running `docker build`
+directly on the server, bypassing CI) without remembering this flag —
+consider adding a fallback default in `site.ts` as a low-priority follow-up,
+or a comment in the Dockerfile next to the `ARG NEXT_PUBLIC_SITE_URL` line.
+Booted the built image against a disposable Postgres on an isolated network:
+entrypoint ran migrations (`[migrate] up to date`), logged the expected
+sandbox-merchant notice, and served `GET /` → `200` within the healthcheck
+window.
+
+**4. Nginx/SSL checklist** — `nginx.conf`/`certbot-entrypoint.sh` reviewed
+(Phase 8, unchanged). Prerequisites before the manual first-certificate step
+in `DEPLOY.md`:
+- [ ] DNS `A`/`AAAA` records for `revayat.shop` and `www.revayat.shop` point
+      at the server's public IP (certbot's webroot challenge fails otherwise)
+- [ ] Port 80 and 443 reachable from the internet (firewall/security group)
+- [ ] `docker compose up -d` already running (nginx must be up to serve the
+      ACME webroot challenge before certbot can issue)
+- [ ] Real email for `-m` in the certbot command (renewal/expiry notices)
+- [ ] `CERT_DOMAIN` in `.env` matches the actual domain if not `revayat.shop`
+
+**5. Database migration plan** — unchanged from §2, re-verified this phase
+(see item 1). Order: `db` up healthy → `web` up (runs migrations
+automatically, idempotent) → one-time `migrate:legacy-json` only on a
+brand-new DB → one-time `db:seed-admin` only if `admins` is empty → remaining
+services up.
+
+**6. Rollback procedure — read-traced and partially rehearsed.**
+`deploy.sh`/`rollback.sh` logic re-read line by line this phase: pull → pin
+`.deploy-image` → `up -d --no-deps web` → poll `docker inspect
+.State.Health.Status` up to 60s → on anything but `healthy`, retag to the
+prior pinned image and restart, exit 1 → only on success does `.deploy-image.prev`
+get written. The container-healthcheck-gate half of this mechanism was
+exercised for real in item 3's disposable run above (image reached `healthy`
+serving state from a cold migration). **Not rehearsed this phase**: the
+scripts themselves were not executed against a full multi-container compose
+stack (`db`+`web`+`nginx`+`certbot`+`backup` together) — that needs a
+production-shaped `.env`, which is out of scope for a preparation-only phase
+with no server access. Recommend one full dry run of `./deploy.sh` +
+`./rollback.sh` against the real compose stack on the server itself, on the
+very first cutover, before DNS is pointed at it (self-contained, no public
+traffic at risk yet).
+
+**7. Smoke test checklist** — `smoke-test.sh` reviewed: 7 unauthenticated GET
+checks (`/`, `/collections`, `/search?q=test`, `/sitemap.xml`, `/robots.txt`,
+`/admin/login`, `/cart`), all expect `200`. This is the automatable subset
+only — §5's manual checklist (storefront, commerce, Zibal sandbox flow,
+admin RBAC/CRUD) remains the authoritative full pass for a human to run
+against the real deploy before opening DNS.
+
+**8. Post-deploy monitoring checklist** (new) — what to watch in the hour
+after a real cutover:
+- [ ] `docker compose ps` — all services `healthy`/`running`, none
+      restarting in a loop
+- [ ] `docker compose logs -f web` — watch specifically for the two named
+      failure signatures in `DEPLOY.md` ("Diagnosing a dead checkout"):
+      `CONFIGURATION ERROR: ZIBAL_MERCHANT is not set` and `CONFIGURATION
+      ERROR on /v1/request: result=115`
+- [ ] `docker compose logs -f web | grep 'PAYMENT CONFIRMED WITHOUT'` — the
+      oversell canary already logged by `payment-flow.ts`'s `applyDecision`
+      (see that file) — any hit means a hold was swept before a late
+      verification landed; investigate immediately, don't ignore
+- [ ] `BASE_URL=https://revayat.shop ./smoke-test.sh` once DNS/TLS are live
+- [ ] `docker compose exec db psql -U <user> -c "select count(*) from
+      pg_stat_activity;"` — connection count sane, no runaway growth
+- [ ] `/admin/payments` → فیلتر "در انتظار" — stuck-pending payments beyond a
+      normal bank round trip; use "استعلام از درگاه" to reconcile
+- [ ] First scheduled `backup` service dump actually lands in the
+      `revayat_backups` volume (`docker compose logs backup`)
+- [ ] Certbot renewal loop logs no errors (`docker compose logs certbot`)
+- [ ] Disk usage on `revayat_pgdata`/`revayat_uploads`/`revayat_backups`
+      volumes — no unexpected growth
